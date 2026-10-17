@@ -1,0 +1,69 @@
+@page "/"
+@using Portal.Contracts.Jobs
+@inject HttpClient Http
+
+<PageTitle>Pracovní nabídky</PageTitle>
+<h1>Pracovní nabídky</h1>
+@if (error is not null)
+{
+    <p role="alert">@error</p>
+}
+else if (jobs is null)
+{
+    <p>Načítání nabídek…</p>
+}
+else if (jobs.Count == 0)
+{
+    <p>Zatím nejsou zveřejněné žádné pracovní nabídky.</p>
+    @if (offset > 0) { <button @onclick="PreviousAsync">Předchozí</button> }
+}
+else
+{
+    @foreach (var job in jobs)
+    {
+        <article>
+            <h2>@job.Title</h2>
+            <p>@job.CompanyName · @job.Location</p>
+        </article>
+    }
+    <div class="actions">
+        <button disabled="@(offset == 0 || loading)" @onclick="PreviousAsync">Předchozí</button>
+        <button disabled="@(jobs.Count < PageSize || loading)" @onclick="NextAsync">Další</button>
+    </div>
+}
+
+@code {
+    private const int PageSize = 20;
+    private List<JobOfferResponse>? jobs;
+    private string? error;
+    private int offset;
+    private bool loading;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        loading = true;
+        try
+        {
+            jobs = await Http.GetFromJsonAsync<List<JobOfferResponse>>($"api/jobs?offset={offset}&limit={PageSize}");
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nabídky se nepodařilo načíst. Zkuste stránku obnovit.";
+        }
+        finally { loading = false; }
+    }
+
+    private async Task PreviousAsync()
+    {
+        offset -= PageSize;
+        await LoadAsync();
+    }
+
+    private async Task NextAsync()
+    {
+        offset += PageSize;
+        await LoadAsync();
+    }
+}

@@ -1,0 +1,21 @@
+{$SITE_ADDRESS:localhost} {
+	encode zstd gzip
+
+	@backend path /api /api/* /hubs/* /health/* /openapi/*
+	handle @backend {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		root * /srv
+		@framework path /_framework/*
+		handle @framework {
+			file_server
+		}
+		handle {
+			try_files {path} /index.html
+			header /index.html Cache-Control "no-cache"
+			file_server
+		}
+	}
+}

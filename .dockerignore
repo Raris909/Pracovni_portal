@@ -1,0 +1,12 @@
+.git
+**/bin
+**/obj
+**/node_modules
+.env
+.env.*
+TestResults
+**/TestResults
+**/appsettings.Local.json
+**/*.pfx
+**/*.key
+artifacts
