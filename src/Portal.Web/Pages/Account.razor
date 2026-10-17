@@ -1,0 +1,50 @@
+@page "/account"
+@using System.Net
+@using Portal.Contracts.Auth
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+
+<PageTitle>Můj účet</PageTitle>
+<h1>Můj účet</h1>
+@if (error is not null)
+{
+    <p role="alert">@error</p>
+}
+else if (user is not null)
+{
+    <dl>
+        <dt>Jméno</dt><dd>@user.FirstName @user.LastName</dd>
+        <dt>E-mail</dt><dd>@user.Email</dd>
+        <dt>Typ účtu</dt><dd>@(user.Role == UserRoles.Candidate ? "Uchazeč o zaměstnání" : "Uživatel firmy")</dd>
+    </dl>
+}
+else
+{
+    <p>Pro zobrazení účtu se <a href="login">přihlaste</a>.</p>
+}
+
+@code {
+    private UserResponse? user;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null) return;
+        try
+        {
+            using var response = await Http.GetAsync("api/auth/me");
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                Session.Logout();
+                error = "Přihlášení vypršelo. Přihlaste se znovu.";
+                return;
+            }
+            response.EnsureSuccessStatusCode();
+            user = await response.Content.ReadFromJsonAsync<UserResponse>();
+        }
+        catch (HttpRequestException)
+        {
+            error = "Účet se nepodařilo načíst. Zkuste to později.";
+        }
+    }
+}

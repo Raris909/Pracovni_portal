@@ -1,0 +1,17 @@
+:root { font-family: system-ui, sans-serif; color: #172b36; background: #f6f8fa; }
+body { margin: 0; }
+header { background: white; border-bottom: 1px solid #d6dfe4; }
+nav { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; padding: 1rem 2rem; }
+main { max-width: 64rem; margin: 2rem auto; padding: 0 1.5rem; }
+a { color: #125b91; }
+form { max-width: 28rem; display: grid; gap: .6rem; }
+input, select, button { font: inherit; padding: .6rem; border: 1px solid #879ba7; border-radius: .3rem; }
+button { cursor: pointer; background: #125b91; color: white; }
+button:disabled { opacity: .6; cursor: default; }
+form button { margin-top: .8rem; }
+article { background: white; border: 1px solid #d6dfe4; padding: 1rem; margin: 1rem 0; border-radius: .5rem; }
+.actions { display: flex; gap: 1rem; }
+.validation-errors, .validation-message, [role="alert"] { color: #a31515; }
+#blazor-error-ui { display: none; position: fixed; bottom: 0; width: 100%; padding: 1rem; background: #fff2c6; }
+.loading-progress { display: block; margin: 20vh auto 1rem; width: 5rem; height: 5rem; }
+.loading-progress circle { fill: none; stroke: #125b91; stroke-width: 6; }
