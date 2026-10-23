@@ -4,9 +4,9 @@
     <UserSecretsId>pracovni-portal-api</UserSecretsId>
   </PropertyGroup>
   <ItemGroup>
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
     <ProjectReference Include="../Portal.Contracts/Portal.Contracts.csproj" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
-    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.12" />
     <PackageReference Include="Npgsql" Version="10.0.0" />
   </ItemGroup>
 </Project>
