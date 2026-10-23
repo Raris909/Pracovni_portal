@@ -16,5 +16,6 @@ JWT_SIGNING_KEY=$signing_key
 SITE_ADDRESS=localhost
 HTTP_PORT=80
 HTTPS_PORT=443
+COMPOSE_FILE=compose.yaml;compose.dev.yaml
 EOF
 echo 'Created .env with random development secrets.'
