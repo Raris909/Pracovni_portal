@@ -1,7 +1,7 @@
 {$SITE_ADDRESS:localhost} {
 	encode zstd gzip
 
-	@backend path /api /api/* /hubs/* /health/* /openapi/*
+	@backend path /api /api/* /hubs/* /health/* /openapi/* /swagger /swagger/*
 	handle @backend {
 		reverse_proxy api:8080
 	}

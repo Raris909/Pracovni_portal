@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using Npgsql;
 using Portal.Api.Auth;
 using Portal.Api.Chat;
@@ -25,7 +26,7 @@ if (builder.Environment.IsDevelopment())
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
-builder.Services.AddOpenApi();
+
 builder.Services.AddOptions<JwtOptions>().BindConfiguration("Jwt")
     .ValidateDataAnnotations().ValidateOnStart();
 builder.Services.AddSingleton(TimeProvider.System);
@@ -34,6 +35,7 @@ builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(
     ?? throw new InvalidOperationException("ConnectionStrings:Portal must be configured.")));
 builder.Services.AddScoped<IPasswordHasher<UserResponse>, PasswordHasher<UserResponse>>();
 builder.Services.AddScoped<TokenService>();
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
     .Configure<IOptions<JwtOptions>>((options, jwtOptions) =>
@@ -58,7 +60,6 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
         {
             OnMessageReceived = context =>
             {
-                // Browser WebSocket clients send SignalR access tokens in the query string.
                 if (context.Request.Path.StartsWithSegments("/hubs/chat")
                     && context.Request.Query.TryGetValue("access_token", out var accessToken))
                     context.Token = accessToken;
@@ -66,32 +67,73 @@ builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationSc
             }
         };
     });
+
 builder.Services.AddAuthorization(options =>
 {
     options.FallbackPolicy = new AuthorizationPolicyBuilder().RequireAuthenticatedUser().Build();
     options.AddPolicy(UserRoles.Candidate, policy => policy.RequireRole(UserRoles.Candidate));
     options.AddPolicy(UserRoles.Company, policy => policy.RequireRole(UserRoles.Company));
 });
+
 builder.Services.AddSignalR();
 builder.Services.AddHealthChecks().AddCheck<DatabaseHealthCheck>("database", tags: ["ready"]);
+
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddCors(options => options.AddDefaultPolicy(policy =>
         policy.WithOrigins("http://localhost:5180").AllowAnyHeader().AllowAnyMethod()));
 }
 
+// Swashbuckle Swagger Configuration
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.SwaggerDoc("v1", new OpenApiInfo { Title = "Portal API", Version = "v1" });
+
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Enter your valid JWT token."
+    });
+
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference
+                {
+                    Type = ReferenceType.SecurityScheme,
+                    Id = "Bearer"
+                }
+            },
+            Array.Empty<string>()
+        }
+    });
+});
+
 var app = builder.Build();
+
+app.UseSwagger();
+app.UseSwaggerUI(c => 
+{
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Portal API v1");
+});
+
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
     app.UseCors();
+    
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 app.MapHub<ChatHub>("/hubs/chat");
 app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false }).AllowAnonymous();
 app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") }).AllowAnonymous();
-if (app.Environment.IsDevelopment())
-    app.MapOpenApi().AllowAnonymous();
 
 app.Run();
 
