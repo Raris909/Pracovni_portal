@@ -33,7 +33,10 @@
 
     <ValidationSummary />
 </EditForm>
-@if (error is not null) { <p role="alert">@error</p> }
+@if (error is not null)
+{
+    <p role="alert">@error</p>
+}
 
 @code {
     private readonly RegisterRequest model = new();

@@ -26,7 +26,8 @@ public sealed class AuthTests(ApiFixture fixture) : IClassFixture<ApiFixture>
 
         var login = await client.PostAsJsonAsync("/api/auth/login", new LoginRequest
         {
-            Email = request.Email.ToUpperInvariant(), Password = request.Password
+            Email = request.Email.ToUpperInvariant(),
+            Password = request.Password
         });
         Assert.Equal(HttpStatusCode.OK, login.StatusCode);
         var auth = (await login.Content.ReadFromJsonAsync<AuthResponse>())!;
@@ -83,7 +84,11 @@ public sealed class AuthTests(ApiFixture fixture) : IClassFixture<ApiFixture>
 
     private static RegisterRequest NewRegistration(string role) => new()
     {
-        Email = $"{Guid.NewGuid():N}@example.com", Password = "valid-password-123",
-        FirstName = "Test", LastName = "User", Role = role
+        Email = $"{Guid.NewGuid():N}@example.com",
+        Password = "valid-password-123",
+        ConfirmPassword = "valid-password-123",
+        FirstName = "Test",
+        LastName = "User",
+        Role = role
     };
 }
