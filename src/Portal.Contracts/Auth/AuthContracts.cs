@@ -16,6 +16,10 @@ public sealed class RegisterRequest
     [Required, StringLength(128, MinimumLength = 12)]
     public string Password { get; set; } = "";
 
+    [Required(ErrorMessage = "Potvrzení hesla je povinné.")]
+    [Compare(nameof(Password), ErrorMessage = "Zadaná hesla se neshodují.")]
+    public string ConfirmPassword { get; set; } = "";
+
     [Required, MaxLength(100)]
     public string FirstName { get; set; } = "";
 

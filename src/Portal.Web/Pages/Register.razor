@@ -7,23 +7,36 @@
 <h1>Registrace</h1>
 <EditForm Model="model" OnValidSubmit="SubmitAsync">
     <DataAnnotationsValidator />
-    <ValidationSummary />
+
     <label for="first-name">Jméno</label>
     <InputText id="first-name" autocomplete="given-name" @bind-Value="model.FirstName" />
+
     <label for="last-name">Příjmení</label>
     <InputText id="last-name" autocomplete="family-name" @bind-Value="model.LastName" />
+
     <label for="email">E-mail</label>
     <InputText id="email" type="email" autocomplete="username" @bind-Value="model.Email" />
+
     <label for="password">Heslo (alespoň 12 znaků)</label>
     <InputText id="password" type="password" autocomplete="new-password" @bind-Value="model.Password" />
+
+    <label for="confirm-password">Potvrzení hesla</label>
+    <InputText id="confirm-password" type="password" autocomplete="new-password" @bind-Value="model.ConfirmPassword" />
+
     <label for="role">Typ účtu</label>
     <InputSelect id="role" @bind-Value="model.Role">
         <option value="candidate">Uchazeč o zaměstnání</option>
         <option value="company">Uživatel firmy</option>
     </InputSelect>
+
     <button type="submit" disabled="@busy">Vytvořit účet</button>
+
+    <ValidationSummary />
 </EditForm>
-@if (error is not null) { <p role="alert">@error</p> }
+@if (error is not null)
+{
+    <p role="alert">@error</p>
+}
 
 @code {
     private readonly RegisterRequest model = new();
