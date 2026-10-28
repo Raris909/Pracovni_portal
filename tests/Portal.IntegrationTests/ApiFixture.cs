@@ -41,12 +41,13 @@ public sealed class ApiFixture : WebApplicationFactory<Program>, IAsyncLifetime
         await database.DisposeAsync();
     }
 
-    public async Task<object?> QueryAsync(string sql, Guid userId)
+    public async Task<object?> QueryAsync(string sql, params object[] parameters)
     {
         await using var connection = new NpgsqlConnection(database.GetConnectionString());
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(sql, connection);
-        command.Parameters.AddWithValue(userId);
+        foreach (var parameter in parameters)
+            command.Parameters.AddWithValue(parameter);
         return await command.ExecuteScalarAsync();
     }
 }

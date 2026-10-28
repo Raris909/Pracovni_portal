@@ -9,6 +9,7 @@ using Microsoft.OpenApi.Models;
 using Npgsql;
 using Portal.Api.Auth;
 using Portal.Api.Chat;
+using Portal.Api.Companies;
 using Portal.Api.Health;
 using Portal.Contracts.Auth;
 
@@ -25,6 +26,7 @@ builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(
     ?? throw new InvalidOperationException("ConnectionStrings:Portal must be configured.")));
 builder.Services.AddScoped<IPasswordHasher<UserResponse>, PasswordHasher<UserResponse>>();
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<CompanyMembershipService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
