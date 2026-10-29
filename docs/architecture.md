@@ -27,6 +27,10 @@ Caddy obsluhuje statický web a předává backendové požadavky API; v `Develo
 | `POST /api/companies` | Aktivní účet `company` | Firma a členství zakladatele `owner` v jedné transakci; `201` + detail, duplicita registračního čísla v zemi `409` |
 | `GET /api/companies` | JWT `company` | Firmy s vlastním aktivním členstvím a aktivním firemním účtem |
 | `GET /api/companies/{companyId}` | Aktivní účet `company` a členství | Firma a vlastní členství; nepřístupná či neexistující firma `404` |
+| `POST /api/companies/{companyId}/jobs` | Aktivní účet `company` a členství | Nový koncept nabídky; `201` + detail pro správu |
+| `PUT /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Nahrazení editovatelných údajů konceptu; jiný stav `409` |
+| `GET /api/companies/{companyId}/jobs?offset=0&limit=20` | Aktivní účet `company` a členství | Nabídky vlastní firmy ve všech stavech |
+| `GET /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Detail nabídky pro správu; cizí či neexistující nabídka `404` |
 | `GET /api/companies/{companyId}/members` | Aktivní účet `company` a členství | Seznam aktivních členství HR týmu |
 | `POST /api/companies/{companyId}/members` | Aktivní `owner` nebo `admin` | Přidání existujícího aktivního firemního účtu nebo obnovení členství; `201`, duplicita `409` |
 | `PATCH /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Změna role HR na `admin` či `recruiter`; `200` |
