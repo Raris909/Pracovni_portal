@@ -27,6 +27,10 @@ Caddy obsluhuje statický web a předává backendové požadavky API; v `Develo
 | `POST /api/companies` | Aktivní účet `company` | Firma a členství zakladatele `owner` v jedné transakci; `201` + detail, duplicita registračního čísla v zemi `409` |
 | `GET /api/companies` | JWT `company` | Firmy s vlastním aktivním členstvím a aktivním firemním účtem |
 | `GET /api/companies/{companyId}` | Aktivní účet `company` a členství | Firma a vlastní členství; nepřístupná či neexistující firma `404` |
+| `GET /api/companies/{companyId}/members` | Aktivní účet `company` a členství | Seznam aktivních členství HR týmu |
+| `POST /api/companies/{companyId}/members` | Aktivní `owner` nebo `admin` | Přidání existujícího aktivního firemního účtu nebo obnovení členství; `201`, duplicita `409` |
+| `PATCH /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Změna role HR na `admin` či `recruiter`; `200` |
+| `DELETE /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Deaktivace HR členství se zachováním vazeb; `204` |
 | `GET /api/jobs?offset=0&limit=20` | Veřejný | Zveřejněné nabídky s neuplynulým nebo neurčeným deadlinem |
 | `/hubs/chat` (SignalR) | JWT | Připojení; metody pro zprávy zatím chybí |
 | `GET /health/live` | Veřejný | Běh procesu |
@@ -46,6 +50,7 @@ Caddy obsluhuje statický web a předává backendové požadavky API; v `Develo
 - SignalR přijímá `access_token` v query pouze pod `/hubs/chat`; tokeny nelogovat.
 - Web drží token v paměti; odhlášení jej odstraní, vydaný JWT serverově nezneplatní. Refresh tokeny nejsou implementované.
 - Endpointy standardně vyžadují přihlášení; veřejné mají explicitní výjimku.
+- Správu HR týmu provádí `owner` nebo `admin`; členství vlastníka je chráněné. Změny rolí a odebrání členství se projeví i s původním JWT.
 
 ## Pravidla pro další vývoj
 
