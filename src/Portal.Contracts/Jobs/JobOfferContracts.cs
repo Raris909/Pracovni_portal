@@ -53,10 +53,10 @@ public sealed class JobOfferRequest : IValidatableObject
     [Required, RegularExpression("^(full_time|part_time|contract|internship)$")]
     public string EmploymentType { get; set; } = "";
 
-    [Range(typeof(decimal), "0", "9999999999.99")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true)]
     public decimal? SalaryMin { get; set; }
 
-    [Range(typeof(decimal), "0", "9999999999.99")]
+    [Range(typeof(decimal), "0", "9999999999.99", ParseLimitsInInvariantCulture = true)]
     public decimal? SalaryMax { get; set; }
 
     [RegularExpression("^[A-Z]{3}$")]
