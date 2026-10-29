@@ -1,0 +1,211 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}",
+    "env": {
+      "DOTNET_CLI_UI_LANGUAGE": "en",
+      "DOTNET_WATCH_SUPPRESS_LAUNCH_BROWSER": "1"
+    }
+  },
+  "tasks": [
+    {
+      "label": "setup: env",
+      "type": "process",
+      "command": "bash",
+      "args": [
+        "scripts/setup-env.sh"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "build",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "build",
+        "Portal.sln",
+        "--configuration",
+        "Debug"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "db: up",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "compose.yaml",
+        "-f",
+        "compose.dev.yaml",
+        "up",
+        "-d",
+        "--wait",
+        "db"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "db: stop",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "-f",
+        "compose.yaml",
+        "-f",
+        "compose.dev.yaml",
+        "stop",
+        "db"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "debug: prepare",
+      "dependsOn": [
+        "build",
+        "db: up"
+      ],
+      "dependsOrder": "sequence",
+      "problemMatcher": [],
+      "hide": true
+    },
+    {
+      "label": "watch: API",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "watch",
+        "--project",
+        "src/Portal.Api",
+        "--launch-profile",
+        "http"
+      ],
+      "dependsOn": "db: up",
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*(?:Building|Restarting).*$",
+          "endsPattern": "\\bNow listening on:\\s+http://localhost:5080\\b"
+        }
+      },
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "watch: Web",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "watch",
+        "--project",
+        "src/Portal.Web",
+        "--launch-profile",
+        "http"
+      ],
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$msCompile",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": "^.*(?:Building|Restarting).*$",
+          "endsPattern": "\\bNow listening on:\\s+http://localhost:5180\\b"
+        }
+      },
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "dev: watch",
+      "dependsOn": [
+        "watch: API",
+        "watch: Web"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "test: unit",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "tests/Portal.Api.Tests"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "test"
+    },
+    {
+      "label": "test: integration",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "tests/Portal.IntegrationTests"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": "test"
+    },
+    {
+      "label": "test: all",
+      "type": "process",
+      "command": "dotnet",
+      "args": [
+        "test",
+        "Portal.sln"
+      ],
+      "problemMatcher": "$msCompile",
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "docker: up",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "up",
+        "--build",
+        "-d",
+        "--wait"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: down",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "down"
+      ],
+      "problemMatcher": []
+    },
+    {
+      "label": "docker: logs",
+      "type": "process",
+      "command": "docker",
+      "args": [
+        "compose",
+        "logs",
+        "--follow",
+        "--tail",
+        "100"
+      ],
+      "problemMatcher": [],
+      "presentation": {
+        "panel": "dedicated"
+      }
+    }
+  ]
+}
