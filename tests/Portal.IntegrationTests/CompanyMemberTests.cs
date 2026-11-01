@@ -205,7 +205,9 @@ public sealed class CompanyMemberTests(ApiFixture fixture) : IClassFixture<ApiFi
         var path = MembersPath(company);
         var request = new Dictionary<string, string?>
         {
-            ["email"] = "hr@example.com", ["role"] = CompanyMemberRoles.Recruiter, [field] = value
+            ["email"] = "hr@example.com",
+            ["role"] = CompanyMemberRoles.Recruiter,
+            [field] = value
         };
         Assert.Equal(HttpStatusCode.BadRequest, (await owner.PostAsJsonAsync(path, request)).StatusCode);
         if (field == "role")
@@ -262,8 +264,8 @@ public sealed class CompanyMemberTests(ApiFixture fixture) : IClassFixture<ApiFi
         var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
         {
             Email = $"{Guid.NewGuid():N}@example.com",
-            Password = "valid-password-123",
-            ConfirmPassword = "valid-password-123",
+            Password = "Valid-password-123",
+            ConfirmPassword = "Valid-password-123",
             FirstName = "Test",
             LastName = "User",
             Role = role
@@ -278,7 +280,8 @@ public sealed class CompanyMemberTests(ApiFixture fixture) : IClassFixture<ApiFi
     {
         var response = await client.PostAsJsonAsync("/api/companies", new CreateCompanyRequest
         {
-            Name = "Test company", CountryCode = "CZ"
+            Name = "Test company",
+            CountryCode = "CZ"
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         return (await response.Content.ReadFromJsonAsync<CompanyMembershipResponse>())!;

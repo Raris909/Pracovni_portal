@@ -7,28 +7,58 @@ flowchart LR
     api -->|Npgsql / SQL| db[(PostgreSQL)]
 ```
 
-Caddy obsluhuje statický web a předává backendové požadavky API; v `Development` také `/openapi/*`.
+Caddy obsluhuje statický web a předává backendové požadavky API; v `Development` také `/openapi/*` a `/swagger/*`.
 
 | Umístění | Odpovědnost |
 | --- | --- |
 | [Portal.Web](../src/Portal.Web/) | Stránky, HTTP klient, přihlášení v paměti |
-| [Portal.Api](../src/Portal.Api/) | `Auth`, `Companies`, `Jobs`, `Chat`, `Health`; SQL a autorizace |
-| [Portal.Contracts](../src/Portal.Contracts/) | Sdílené request/response DTO a validace |
+| [Portal.Api](../src/Portal.Api/) | Web API: Controllery, aplikační služby (`AuthService`, `CompanyMembershipService`), repozitáře (`IUserRepository`, `ICompanyRepository`, `IJobOfferRepository`), SignalR hub a health checky |
+| [Portal.Contracts](../src/Portal.Contracts/) | Sdílené request/response DTO a validační modely |
 | [Database](../Database/) | Schéma a počáteční role |
 | [deploy/Caddyfile](../deploy/Caddyfile) | HTTPS, směrování, obsluha WASM |
 
-## Rozhraní
+## Struktura vrstev backendu (`Portal.Api`)
+
+V rámci refaktorizace byla oddělena aplikační a databázová logika z controllerů do samostatných vrstev:
+
+```mermaid
+flowchart TD
+    Controller["API Controller\n(HTTP, routing, stavové kódy, DTO)"]
+    Service["Aplikační / Business služba\n(AuthService, CompanyMembershipService)"]
+    Repo["Repozitář s rozhraním\n(IUserRepository, ICompanyRepository, IJobOfferRepository)"]
+    DB[("PostgreSQL\n(Npgsql, transakce, SQL)")]
+
+    Controller -->|Volá business operace| Service
+    Controller -.->|Přímé čtení / CRUD bez extra logiky| Repo
+    Service -->|Předává perzistenci| Repo
+    Repo -->|Parametrizované SQL / transakce| DB
+```
+
+1. **API Controllery** (`*Controller.cs`):
+   - Odpovídají výhradně za HTTP vrstvu: routování, čtení claims z JWT kontextu (`sub`), autorizační politiky a mapování stavových kódů (např. Problem Details pro `400`, `401`, `403`, `404`, `409`).
+   - Neobsahují žádné SQL příkazy ani přímou správu transakcí.
+
+2. **Aplikační služby** (`AuthService`, `CompanyMembershipService`):
+   - Zapouzdřují business operace a validační logiku vyžadující koordinaci více komponent (např. hashování hesla, re-hashing a vydávání JWT tokenu při loginu/registraci).
+   - Zajišťují autorizační kontroly členství firmy před provedením akce.
+
+3. **Repozitáře** (`*Repository.cs` s rozhraními `I*Repository.cs`):
+   - Zapouzdřují veškerou SQL komunikaci přes `NpgsqlDataSource` a `NpgsqlCommand`.
+   - Spravují explicitní databázové transakce, řádkové zamykání (`FOR UPDATE`, `FOR SHARE`) a řešení konfliktů (`PostgresException` pro unikátní klíče).
+   - Vracejí silně typované enumy statusů (např. `RegisterUserStatus`, `CreateCompanyStatus`, `MemberManagementStatus`, `JobUpdateStatus`) pro přesné mapování v controllerech.
+
+## Rozhraní API
 
 | Metoda a cesta | Přístup | Výsledek |
 | --- | --- | --- |
 | `POST /api/auth/register` | Veřejný | `201` + JWT; duplicitní e-mail `409` |
 | `POST /api/auth/login` | Veřejný | `200` + JWT; nesprávné údaje `401` |
 | `GET /api/auth/me` | JWT | Aktivní vlastní účet; jinak `401` |
-| `POST /api/companies` | Aktivní účet `company` | Firma a členství zakladatele `owner` v jedné transakci; `201` + detail, duplicita registračního čísla v zemi `409` |
-| `GET /api/companies` | JWT `company` | Firmy s vlastním aktivním členstvím a aktivním firemním účtem |
+| `POST /api/companies` | Aktivní účet `company` | Vytvoření firmy a členství zakladatele `owner` v jedné transakci; `201` + detail, duplicita registračního čísla v zemi `409` |
+| `GET /api/companies` | JWT `company` | Seznam firem s vlastním aktivním členstvím a aktivním firemním účtem |
 | `GET /api/companies/{companyId}` | Aktivní účet `company` a členství | Firma a vlastní členství; nepřístupná či neexistující firma `404` |
 | `POST /api/companies/{companyId}/jobs` | Aktivní účet `company` a členství | Nový koncept nabídky; `201` + detail pro správu |
-| `PUT /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Nahrazení editovatelných údajů konceptu; jiný stav `409` |
+| `PUT /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Nahrazení editovatelných údajů konceptu; jiný stav nabídky `409` |
 | `GET /api/companies/{companyId}/jobs?offset=0&limit=20` | Aktivní účet `company` a členství | Nabídky vlastní firmy ve všech stavech |
 | `GET /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Detail nabídky pro správu; cizí či neexistující nabídka `404` |
 | `GET /api/companies/{companyId}/members` | Aktivní účet `company` a členství | Seznam aktivních členství HR týmu |
@@ -36,29 +66,28 @@ Caddy obsluhuje statický web a předává backendové požadavky API; v `Develo
 | `PATCH /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Změna role HR na `admin` či `recruiter`; `200` |
 | `DELETE /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Deaktivace HR členství se zachováním vazeb; `204` |
 | `GET /api/jobs?offset=0&limit=20` | Veřejný | Zveřejněné nabídky s neuplynulým nebo neurčeným deadlinem |
-| `/hubs/chat` (SignalR) | JWT | Připojení; metody pro zprávy zatím chybí |
-| `GET /health/live` | Veřejný | Běh procesu |
-| `GET /health/ready` | Veřejný | Spojení s DB a přítomnost obou rolí; při chybě `503` |
-| `GET /openapi/v1.json` | Jen Development | OpenAPI JSON |
+| `/hubs/chat` (SignalR) | JWT | WebSocket připojení; zprávy se připravují |
+| `GET /health/live` | Veřejný | Běh procesu API |
+| `GET /health/ready` | Veřejný | Spojení s DB a přítomnost rolí `candidate` a `company`; při chybě `503` |
+| `GET /openapi/v1.json` | Jen Development | OpenAPI JSON specifikace |
+| `GET /swagger` | Jen Development | Swagger UI |
 
-- JSON: `camelCase`; validační a aplikační chyby: Problem Details.
+- JSON: `camelCase`; validační a aplikační chyby: Problem Details (`application/problem+json`).
 - Nabídky: `offset ≥ 0`, `limit 1–100`; neplatné hodnoty → `400`.
-- Přesné datové kontrakty: [AuthContracts.cs](../src/Portal.Contracts/Auth/AuthContracts.cs), [JobOfferResponse.cs](../src/Portal.Contracts/Jobs/JobOfferResponse.cs).
+- Datové modely kontraktů: [AuthContracts.cs](../src/Portal.Contracts/Auth/AuthContracts.cs), [CompanyContracts.cs](../src/Portal.Contracts/Companies/CompanyContracts.cs), [JobOfferContracts.cs](../src/Portal.Contracts/Jobs/JobOfferContracts.cs).
 
 ## Přihlášení a oprávnění
 
-- Hesla: ASP.NET Core `PasswordHasher` (PBKDF2).
+- Hesla: ASP.NET Core `PasswordHasher<UserResponse>` (PBKDF2) s kontrolou zastaralého hashe a automatickým re-hashem při úspěšném přihlášení.
 - JWT: HS256, výchozí platnost 30 minut; role `candidate` / `company`.
 - Registrace a login vracejí `accessToken`, `expiresAt`, `user`.
 - HTTP hlavička: `Authorization: Bearer <accessToken>`.
-- SignalR přijímá `access_token` v query pouze pod `/hubs/chat`; tokeny nelogovat.
-- Web drží token v paměti; odhlášení jej odstraní, vydaný JWT serverově nezneplatní. Refresh tokeny nejsou implementované.
-- Endpointy standardně vyžadují přihlášení; veřejné mají explicitní výjimku.
-- Správu HR týmu provádí `owner` nebo `admin`; členství vlastníka je chráněné. Změny rolí a odebrání členství se projeví i s původním JWT.
+- SignalR přijímá `access_token` v query pouze pod `/hubs/chat`.
+- Správu HR týmu provádí `owner` nebo `admin`; členství vlastníka je chráněné proti smazání i změně role.
 
 ## Pravidla pro další vývoj
 
-- Přístup k datům ověřovat v API podle vlastníka nebo aktivního členství ve firmě; role sama nestačí.
-- SQL je parametrizované přes Npgsql; ORM ani automatické migrace nejsou zavedené.
-- Soubory ukládat soukromě mimo web root; klientům zpřístupňovat přes autorizované API.
-- AI volat z backendu; klíče nepatří do WASM klienta.
+- **Dodržovat oddělení vrstev:** Nové controllery nesmí přímo volat SQL. Veškerou databázovou práci směrovat do odpovídajícího repozitáře pod rozhraním (pro snazší mockování a testovatelnost v `Portal.Api.Tests`).
+- **Transakce a integrita:** Vícekrokové operace (např. registrace se založením profilu, vytvoření firmy se zakladatelem) řešit v jedné databázové transakci.
+- **SQL přístup:** SQL psát parametrizovaně přímo pro Npgsql, bez ORM.
+- **Autorizace na úrovni dat:** Vždy v SQL dotazech ověřovat aktivní členství ve firmě a stav účtu (`is_active`), nespoléhat pouze na platnost JWT tokenu.

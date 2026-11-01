@@ -202,7 +202,9 @@ public sealed class CompanyTests(ApiFixture fixture) : IClassFixture<ApiFixture>
         await RegisterAsync(client);
         var request = new Dictionary<string, string>
         {
-            ["name"] = "Test company", ["countryCode"] = "CZ", [field] = value
+            ["name"] = "Test company",
+            ["countryCode"] = "CZ",
+            [field] = value
         };
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/companies", request)).StatusCode);
         Assert.Empty((await client.GetFromJsonAsync<CompanyMembershipResponse[]>("/api/companies"))!);
@@ -223,8 +225,8 @@ public sealed class CompanyTests(ApiFixture fixture) : IClassFixture<ApiFixture>
         var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
         {
             Email = $"{Guid.NewGuid():N}@example.com",
-            Password = "valid-password-123",
-            ConfirmPassword = "valid-password-123",
+            Password = "Valid-password-123",
+            ConfirmPassword = "Valid-password-123",
             FirstName = "Test",
             LastName = "User",
             Role = role

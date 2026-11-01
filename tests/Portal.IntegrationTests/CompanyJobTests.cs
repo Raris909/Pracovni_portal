@@ -91,10 +91,17 @@ public sealed class CompanyJobTests(ApiFixture fixture) : IClassFixture<ApiFixtu
         var updated = (await response.Content.ReadFromJsonAsync<JobOfferManagementResponse>())!;
         Assert.Equal(original with
         {
-            Title = request.Title, Description = request.Description, Requirements = request.Requirements,
-            Location = request.Location, WorkMode = request.WorkMode, EmploymentType = request.EmploymentType,
-            SalaryMax = request.SalaryMax, SalaryCurrency = request.SalaryCurrency, SalaryPeriod = request.SalaryPeriod,
-            ApplicationDeadline = request.ApplicationDeadline, UpdatedAt = updated.UpdatedAt
+            Title = request.Title,
+            Description = request.Description,
+            Requirements = request.Requirements,
+            Location = request.Location,
+            WorkMode = request.WorkMode,
+            EmploymentType = request.EmploymentType,
+            SalaryMax = request.SalaryMax,
+            SalaryCurrency = request.SalaryCurrency,
+            SalaryPeriod = request.SalaryPeriod,
+            ApplicationDeadline = request.ApplicationDeadline,
+            UpdatedAt = updated.UpdatedAt
         }, updated);
         Assert.True(updated.UpdatedAt > original.UpdatedAt);
         Assert.Equal(updated, await owner.GetFromJsonAsync<JobOfferManagementResponse>($"{Path(company)}/{original.Id}"));
@@ -122,11 +129,18 @@ public sealed class CompanyJobTests(ApiFixture fixture) : IClassFixture<ApiFixtu
         var company = await CreateCompanyAsync(client);
         var request = new
         {
-            title = "Test", description = "Description", requirements = "",
-            workMode = WorkModes.Remote, employmentType = EmploymentTypes.FullTime,
-            id = Guid.NewGuid(), companyId = Guid.NewGuid(), createdByMemberId = Guid.NewGuid(),
-            status = JobOfferStatuses.Published, publishedAt = "2026-01-01T00:00:00Z",
-            createdAt = "2026-01-01T00:00:00Z", updatedAt = "2026-01-01T00:00:00Z"
+            title = "Test",
+            description = "Description",
+            requirements = "",
+            workMode = WorkModes.Remote,
+            employmentType = EmploymentTypes.FullTime,
+            id = Guid.NewGuid(),
+            companyId = Guid.NewGuid(),
+            createdByMemberId = Guid.NewGuid(),
+            status = JobOfferStatuses.Published,
+            publishedAt = "2026-01-01T00:00:00Z",
+            createdAt = "2026-01-01T00:00:00Z",
+            updatedAt = "2026-01-01T00:00:00Z"
         };
         var response = await client.PostAsJsonAsync(Path(company), request);
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
@@ -246,8 +260,11 @@ public sealed class CompanyJobTests(ApiFixture fixture) : IClassFixture<ApiFixtu
         var job = await CreateJobAsync(client, company);
         var request = new Dictionary<string, object?>
         {
-            ["title"] = "Test", ["description"] = "Description", ["requirements"] = "",
-            ["workMode"] = WorkModes.Remote, ["employmentType"] = EmploymentTypes.FullTime,
+            ["title"] = "Test",
+            ["description"] = "Description",
+            ["requirements"] = "",
+            ["workMode"] = WorkModes.Remote,
+            ["employmentType"] = EmploymentTypes.FullTime,
             [field] = field is "salaryMin" or "salaryMax"
                 ? decimal.Parse(value!, System.Globalization.CultureInfo.InvariantCulture) : value
         };
@@ -320,16 +337,22 @@ public sealed class CompanyJobTests(ApiFixture fixture) : IClassFixture<ApiFixtu
 
     private static JobOfferRequest NewJob() => new()
     {
-        Title = "Vývojář", Description = "Vývoj webových aplikací",
-        WorkMode = WorkModes.Remote, EmploymentType = EmploymentTypes.FullTime
+        Title = "Vývojář",
+        Description = "Vývoj webových aplikací",
+        WorkMode = WorkModes.Remote,
+        EmploymentType = EmploymentTypes.FullTime
     };
 
     private static async Task<UserResponse> RegisterAsync(HttpClient client, string role = UserRoles.Company)
     {
         var response = await client.PostAsJsonAsync("/api/auth/register", new RegisterRequest
         {
-            Email = $"{Guid.NewGuid():N}@example.com", Password = "valid-password-123",
-            ConfirmPassword = "valid-password-123", FirstName = "Test", LastName = "User", Role = role
+            Email = $"{Guid.NewGuid():N}@example.com",
+            Password = "Valid-password-123",
+            ConfirmPassword = "Valid-password-123",
+            FirstName = "Test",
+            LastName = "User",
+            Role = role
         });
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var auth = (await response.Content.ReadFromJsonAsync<AuthResponse>())!;
