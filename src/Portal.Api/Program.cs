@@ -11,6 +11,7 @@ using Portal.Api.Auth;
 using Portal.Api.Chat;
 using Portal.Api.Companies;
 using Portal.Api.Health;
+using Portal.Api.Jobs;
 using Portal.Contracts.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -26,7 +27,11 @@ builder.Services.AddSingleton(_ => NpgsqlDataSource.Create(
     ?? throw new InvalidOperationException("ConnectionStrings:Portal must be configured.")));
 builder.Services.AddScoped<IPasswordHasher<UserResponse>, PasswordHasher<UserResponse>>();
 builder.Services.AddScoped<TokenService>();
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
+builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
@@ -111,7 +116,7 @@ builder.Services.AddSwaggerGen(options =>
 var app = builder.Build();
 
 app.UseSwagger();
-app.UseSwaggerUI(c => 
+app.UseSwaggerUI(c =>
 {
     c.SwaggerEndpoint("/swagger/v1/swagger.json", "Portal API v1");
 });
@@ -119,7 +124,7 @@ app.UseSwaggerUI(c =>
 app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
     app.UseCors();
-    
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();

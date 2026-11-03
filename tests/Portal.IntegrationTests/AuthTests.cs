@@ -61,13 +61,29 @@ public sealed class AuthTests(ApiFixture fixture) : IClassFixture<ApiFixture>
     }
 
     [Theory]
-    [InlineData("admin", "valid-password-123")]
+    [InlineData("admin", "Valid-password-123")]
     [InlineData(UserRoles.Candidate, "short")]
-    public async Task InvalidRegistrationIsRejected(string role, string password)
+    [InlineData(UserRoles.Candidate, "valid-password-123")] 
+    [InlineData(UserRoles.Candidate, "VALID-PASSWORD-123")] 
+    [InlineData(UserRoles.Candidate, "ValidPassword123")] 
+    public async Task InvalidRegistrationPasswordOrRoleIsRejected(string role, string password)
     {
         using var client = fixture.CreateClient();
         var request = NewRegistration(role);
         request.Password = password;
+        request.ConfirmPassword = password;
+        Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/register", request)).StatusCode);
+    }
+
+    [Theory]
+    [InlineData("user@localhost")]
+    [InlineData("invalid-email")]
+    [InlineData("user@domain")]
+    public async Task InvalidRegistrationEmailIsRejected(string email)
+    {
+        using var client = fixture.CreateClient();
+        var request = NewRegistration(UserRoles.Candidate);
+        request.Email = email;
         Assert.Equal(HttpStatusCode.BadRequest, (await client.PostAsJsonAsync("/api/auth/register", request)).StatusCode);
     }
 
@@ -85,8 +101,8 @@ public sealed class AuthTests(ApiFixture fixture) : IClassFixture<ApiFixture>
     private static RegisterRequest NewRegistration(string role) => new()
     {
         Email = $"{Guid.NewGuid():N}@example.com",
-        Password = "valid-password-123",
-        ConfirmPassword = "valid-password-123",
+        Password = "Valid-password-123",
+        ConfirmPassword = "Valid-password-123",
         FirstName = "Test",
         LastName = "User",
         Role = role
