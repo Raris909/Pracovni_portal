@@ -15,6 +15,7 @@ using Portal.Api.Jobs;
 using Portal.Api.Profiles;
 using Portal.Api.Profiles.Storage;
 using Portal.Contracts.Auth;
+using Portal.Api.Applications;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,6 +37,7 @@ builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
 
+builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
 
 builder.Services.Configure<DocumentStorageOptions>(
     builder.Configuration.GetSection(DocumentStorageOptions.SectionName));
