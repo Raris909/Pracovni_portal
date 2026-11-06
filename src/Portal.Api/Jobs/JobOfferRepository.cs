@@ -1,5 +1,6 @@
 using Npgsql;
 using NpgsqlTypes;
+using Portal.Contracts.Companies;
 using Portal.Contracts.Jobs;
 
 namespace Portal.Api.Jobs;
@@ -33,6 +34,39 @@ public sealed class JobOfferRepository(NpgsqlDataSource database) : IJobOfferRep
                 reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetString(4)));
         }
         return jobs;
+    }
+
+    public async Task<JobOfferDetailResponse?> GetPublishedJobByIdAsync(Guid jobId, CancellationToken cancellationToken)
+    {
+        await using var command = database.CreateCommand("""
+            SELECT j.id, j.title, j.description, j.requirements, j.location, j.work_mode,
+                j.employment_type, j.salary_min, j.salary_max, j.salary_currency, j.salary_period,
+                j.published_at, j.application_deadline,
+                c.id, c.name, c.registration_number, c.country_code, c.description,
+                c.website_url, c.address, c.created_at, c.updated_at
+            FROM portal.job_offers j JOIN portal.companies c ON c.id = j.company_id
+            WHERE j.id = $1 AND j.status = 'published'
+              AND (j.application_deadline IS NULL OR j.application_deadline > now())
+            """);
+        command.Parameters.AddWithValue(jobId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        if (!await reader.ReadAsync(cancellationToken))
+            return null;
+
+        var company = new CompanyResponse(
+            reader.GetGuid(13), reader.GetString(14), reader.IsDBNull(15) ? null : reader.GetString(15),
+            reader.GetString(16), reader.IsDBNull(17) ? null : reader.GetString(17),
+            reader.IsDBNull(18) ? null : reader.GetString(18), reader.IsDBNull(19) ? null : reader.GetString(19),
+            reader.GetFieldValue<DateTimeOffset>(20), reader.GetFieldValue<DateTimeOffset>(21));
+
+        return new JobOfferDetailResponse(
+            reader.GetGuid(0), company, reader.GetString(1), reader.GetString(2), reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4), reader.GetString(5), reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetDecimal(7), reader.IsDBNull(8) ? null : reader.GetDecimal(8),
+            reader.IsDBNull(9) ? null : reader.GetString(9), reader.IsDBNull(10) ? null : reader.GetString(10),
+            reader.GetFieldValue<DateTimeOffset>(11),
+            reader.IsDBNull(12) ? null : reader.GetFieldValue<DateTimeOffset>(12));
     }
 
     public async Task<IReadOnlyList<JobOfferManagementResponse>> GetCompanyJobsAsync(Guid companyId, int limit, int offset, CancellationToken cancellationToken)
@@ -142,6 +176,64 @@ public sealed class JobOfferRepository(NpgsqlDataSource database) : IJobOfferRep
 
         await transaction.CommitAsync(cancellationToken);
         return (job, JobUpdateStatus.Success);
+    }
+
+    public Task<(JobOfferManagementResponse? Job, JobTransitionStatus Status)> PublishJobAsync(
+        Guid companyId, Guid jobId, Guid userId, CancellationToken cancellationToken) =>
+        ChangeStatusAsync(companyId, jobId, userId, JobOfferStatuses.Published, cancellationToken);
+
+    public Task<(JobOfferManagementResponse? Job, JobTransitionStatus Status)> CloseJobAsync(
+        Guid companyId, Guid jobId, Guid userId, CancellationToken cancellationToken) =>
+        ChangeStatusAsync(companyId, jobId, userId, JobOfferStatuses.Closed, cancellationToken);
+
+    private async Task<(JobOfferManagementResponse? Job, JobTransitionStatus Status)> ChangeStatusAsync(
+        Guid companyId, Guid jobId, Guid userId, string targetStatus, CancellationToken cancellationToken)
+    {
+        await using var connection = await database.OpenConnectionAsync(cancellationToken);
+        await using var transaction = await connection.BeginTransactionAsync(cancellationToken);
+
+        if (await LockMemberAsync(connection, transaction, userId, companyId, cancellationToken) is null)
+            return (null, JobTransitionStatus.CompanyNotFound);
+
+        await using var statusCommand = new NpgsqlCommand("""
+            SELECT status FROM portal.job_offers WHERE company_id = $1 AND id = $2 FOR UPDATE
+            """, connection, transaction);
+        statusCommand.Parameters.AddWithValue(companyId);
+        statusCommand.Parameters.AddWithValue(jobId);
+
+        var status = (string?)await statusCommand.ExecuteScalarAsync(cancellationToken);
+        if (status is null)
+            return (null, JobTransitionStatus.OfferNotFound);
+
+        var requiredStatus = targetStatus == JobOfferStatuses.Published
+            ? JobOfferStatuses.Draft : JobOfferStatuses.Published;
+        if (status != requiredStatus)
+            return (null, JobTransitionStatus.InvalidStatus);
+
+        // Check the deadline after acquiring the row lock, using the publication timestamp.
+        await using var command = new NpgsqlCommand($"""
+            UPDATE portal.job_offers SET
+                status = $3,
+                published_at = CASE WHEN $3 = 'published' THEN statement_timestamp() ELSE published_at END
+            WHERE company_id = $1 AND id = $2
+              AND ($3 <> 'published' OR application_deadline IS NULL OR application_deadline > statement_timestamp())
+            RETURNING {Columns}
+            """, connection, transaction);
+        command.Parameters.AddWithValue(companyId);
+        command.Parameters.AddWithValue(jobId);
+        command.Parameters.AddWithValue(targetStatus);
+
+        JobOfferManagementResponse job;
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            if (!await reader.ReadAsync(cancellationToken))
+                return (null, JobTransitionStatus.DeadlineExpired);
+
+            job = ReadJob(reader);
+        }
+
+        await transaction.CommitAsync(cancellationToken);
+        return (job, JobTransitionStatus.Success);
     }
 
     private static async Task<Guid?> LockMemberAsync(

@@ -75,4 +75,33 @@ public sealed class CompanyJobsController(
             _ => Problem(statusCode: 500, title: "Neočekávaná chyba serveru.")
         };
     }
+
+    [HttpPost("{jobId:guid}/publish")]
+    public async Task<ActionResult<JobOfferManagementResponse>> Publish(
+        Guid companyId, Guid jobId, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        var result = await jobRepository.PublishJobAsync(companyId, jobId, userId, cancellationToken);
+        return TransitionResult(result);
+    }
+
+    [HttpPost("{jobId:guid}/close")]
+    public async Task<ActionResult<JobOfferManagementResponse>> Close(
+        Guid companyId, Guid jobId, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        var result = await jobRepository.CloseJobAsync(companyId, jobId, userId, cancellationToken);
+        return TransitionResult(result);
+    }
+
+    private ActionResult<JobOfferManagementResponse> TransitionResult(
+        (JobOfferManagementResponse? Job, JobTransitionStatus Status) result) => result.Status switch
+    {
+        JobTransitionStatus.CompanyNotFound => Problem(statusCode: 404, title: "Firma nebyla nalezena."),
+        JobTransitionStatus.OfferNotFound => Problem(statusCode: 404, title: "Nabídka nebyla nalezena."),
+        JobTransitionStatus.InvalidStatus => Problem(statusCode: 409, title: "Stav nabídky neumožňuje požadovanou změnu."),
+        JobTransitionStatus.DeadlineExpired => Problem(statusCode: 409, title: "Nabídku s uplynulým termínem přihlášek nelze publikovat."),
+        JobTransitionStatus.Success => Ok(result.Job!),
+        _ => Problem(statusCode: 500, title: "Neočekávaná chyba serveru.")
+    };
 }
