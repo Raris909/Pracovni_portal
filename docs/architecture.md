@@ -51,9 +51,21 @@ flowchart TD
 
 | Metoda a cesta | Přístup | Výsledek |
 | --- | --- | --- |
+## Rozhraní API
+
+| Metoda a cesta | Přístup | Výsledek |
+| --- | --- | --- |
 | `POST /api/auth/register` | Veřejný | `201` + JWT; duplicitní e-mail `409` |
 | `POST /api/auth/login` | Veřejný | `200` + JWT; nesprávné údaje `401` |
 | `GET /api/auth/me` | JWT | Aktivní vlastní účet; jinak `401` |
+| `GET /api/profiles/me` | Aktivní účet `candidate` | Získání kompletního profilu uchazeče (údaje, praxe, vzdělání) |
+| `PUT /api/profiles/me` | Aktivní účet `candidate` | Aktualizace základních údajů a dovedností v profilu; `200` |
+| `POST /api/profiles/me/experiences` | Aktivní účet `candidate` | Přidání nové pracovní zkušenosti; `201` |
+| `PUT /api/profiles/me/experiences/{id}` | Aktivní účet `candidate` | Úprava pracovní zkušenosti; neexistující `404` |
+| `DELETE /api/profiles/me/experiences/{id}`| Aktivní účet `candidate` | Smazání pracovní zkušenosti; `204`, neexistující `404` |
+| `POST /api/profiles/me/education` | Aktivní účet `candidate` | Přidání záznamu o vzdělání; `201` |
+| `PUT /api/profiles/me/education/{id}` | Aktivní účet `candidate` | Úprava záznamu o vzdělání; neexistující `404` |
+| `DELETE /api/profiles/me/education/{id}` | Aktivní účet `candidate` | Smazání záznamu o vzdělání; `204`, neexistující `404` |
 | `POST /api/companies` | Aktivní účet `company` | Vytvoření firmy a členství zakladatele `owner` v jedné transakci; `201` + detail, duplicita registračního čísla v zemi `409` |
 | `GET /api/companies` | JWT `company` | Seznam firem s vlastním aktivním členstvím a aktivním firemním účtem |
 | `GET /api/companies/{companyId}` | Aktivní účet `company` a členství | Firma a vlastní členství; nepřístupná či neexistující firma `404` |

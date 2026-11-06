@@ -12,6 +12,7 @@ using Portal.Api.Chat;
 using Portal.Api.Companies;
 using Portal.Api.Health;
 using Portal.Api.Jobs;
+using Portal.Api.Profiles;
 using Portal.Contracts.Auth;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -32,6 +33,7 @@ builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
+builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
