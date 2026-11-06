@@ -19,4 +19,15 @@ public sealed class JobsController(IJobOfferRepository jobRepository) : Controll
         var jobs = await jobRepository.GetPublishedJobsAsync(limit, offset, cancellationToken);
         return Ok(jobs);
     }
+
+    [AllowAnonymous]
+    [HttpGet("{jobId:guid}")]
+    public async Task<ActionResult<JobOfferDetailResponse>> Get(Guid jobId, CancellationToken cancellationToken)
+    {
+        var job = await jobRepository.GetPublishedJobByIdAsync(jobId, cancellationToken);
+        if (job is null)
+            return Problem(statusCode: 404, title: "Nabídka nebyla nalezena.");
+
+        return Ok(job);
+    }
 }
