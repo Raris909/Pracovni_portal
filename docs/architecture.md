@@ -73,11 +73,14 @@ flowchart TD
 | `PUT /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Nahrazení editovatelných údajů konceptu; jiný stav nabídky `409` |
 | `GET /api/companies/{companyId}/jobs?offset=0&limit=20` | Aktivní účet `company` a členství | Nabídky vlastní firmy ve všech stavech |
 | `GET /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Detail nabídky pro správu; cizí či neexistující nabídka `404` |
+| `POST /api/companies/{companyId}/jobs/{jobId}/publish` | Aktivní účet `company` a členství | Publikace konceptu s budoucím nebo neurčeným deadlinem; `200` + detail, nepovolený stav či uplynulý deadline `409` |
+| `POST /api/companies/{companyId}/jobs/{jobId}/close` | Aktivní účet `company` a členství | Uzavření publikované nabídky se zachováním `publishedAt`; `200` + detail, nepovolený stav `409` |
 | `GET /api/companies/{companyId}/members` | Aktivní účet `company` a členství | Seznam aktivních členství HR týmu |
 | `POST /api/companies/{companyId}/members` | Aktivní `owner` nebo `admin` | Přidání existujícího aktivního firemního účtu nebo obnovení členství; `201`, duplicita `409` |
 | `PATCH /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Změna role HR na `admin` či `recruiter`; `200` |
 | `DELETE /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Deaktivace HR členství se zachováním vazeb; `204` |
 | `GET /api/jobs?offset=0&limit=20` | Veřejný | Zveřejněné nabídky s neuplynulým nebo neurčeným deadlinem |
+| `GET /api/jobs/{jobId}` | Veřejný | Detail dostupné nabídky s údaji firmy; ostatní stavy, uplynulý deadline či neexistující ID `404` |
 | `/hubs/chat` (SignalR) | JWT | WebSocket připojení; zprávy se připravují |
 | `GET /health/live` | Veřejný | Běh procesu API |
 | `GET /health/ready` | Veřejný | Spojení s DB a přítomnost rolí `candidate` a `company`; při chybě `503` |
