@@ -1,7 +1,10 @@
-using System.ComponentModel.DataAnnotations;
+using Portal.Contracts.Recruitment;
 
 namespace Portal.Contracts.Applications;
 
+/// <summary>
+/// Allowed values for <c>portal.applications.status</c>.
+/// </summary>
 public static class ApplicationStatuses
 {
     public const string Submitted = "submitted";
@@ -9,67 +12,79 @@ public static class ApplicationStatuses
     public const string Rejected = "rejected";
     public const string Accepted = "accepted";
     public const string Withdrawn = "withdrawn";
-}
 
-public sealed class CreateApplicationRequest : IValidatableObject
-{
-    public Guid JobOfferId { get; set; }
-
-    [MaxLength(10000)]
-    public string? CoverMessage { get; set; }
-
-    [Required]
-    public List<Guid> DocumentIds { get; set; } = [];
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    public static readonly IReadOnlySet<string> All = new HashSet<string>
     {
-        if (JobOfferId == Guid.Empty)
-            yield return new ValidationResult("A job offer ID is required.", [nameof(JobOfferId)]);
-
-        if (DocumentIds is not null)
-        {
-            if (DocumentIds.Contains(Guid.Empty))
-                yield return new ValidationResult("Document IDs must not be empty.", [nameof(DocumentIds)]);
-
-            if (DocumentIds.Distinct().Count() != DocumentIds.Count)
-                yield return new ValidationResult("Document IDs must be unique.", [nameof(DocumentIds)]);
-        }
-    }
+        Submitted,
+        InProgress,
+        Rejected,
+        Accepted,
+        Withdrawn
+    };
 }
 
-public sealed class UpdateApplicationStatusRequest
-{
-    [Required, RegularExpression("^(in_progress|rejected|accepted)$")]
-    public string Status { get; set; } = "";
-}
-
-public sealed class AssignApplicationRequest : IValidatableObject
-{
-    public Guid? AssignedMemberId { get; set; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-    {
-        if (AssignedMemberId == Guid.Empty)
-            yield return new ValidationResult("Use null to remove the assignment.", [nameof(AssignedMemberId)]);
-    }
-}
-
-public sealed record ApplicationResponse(
+/// <summary>
+/// Summary item for listing the current candidate's job applications (<c>GET /api/applications/my</c> or <c>GET /api/profile/applications</c>).
+/// </summary>
+public sealed record CandidateApplicationSummaryResponse(
     Guid Id,
     Guid JobOfferId,
-    Guid CompanyId,
-    Guid CandidateId,
     string JobTitle,
+    Guid CompanyId,
     string CompanyName,
-    string CandidateFirstName,
-    string CandidateLastName,
-    Guid? AssignedMemberId,
+    string? Location,
+    string WorkMode,
+    string EmploymentType,
     string Status,
+    string? CurrentStageName,
+    string? CurrentStageKind,
+    string? CurrentStageStatus,
     DateTimeOffset SubmittedAt,
     DateTimeOffset UpdatedAt);
 
-public sealed record ApplicationDetailResponse(
-    ApplicationResponse Application,
+/// <summary>
+/// Detailed view of a single candidate application (<c>GET /api/applications/{id}</c>),
+/// including the profile snapshot, attached documents, and stage-by-stage progress.
+/// </summary>
+public sealed record CandidateApplicationDetailResponse(
+    Guid Id,
+    Guid JobOfferId,
+    string JobTitle,
+    Guid CompanyId,
+    string CompanyName,
+    string? Location,
+    string WorkMode,
+    string EmploymentType,
+    string Status,
     string? CoverMessage,
     ApplicationProfileSnapshot ProfileSnapshot,
-    IReadOnlyList<ApplicationDocumentResponse> Documents);
+    IReadOnlyList<ApplicationAttachedDocumentResponse> AttachedDocuments,
+    IReadOnlyList<CandidateApplicationStageProgressResponse> Stages,
+    Guid? ConversationId,
+    DateTimeOffset SubmittedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>
+/// Represents a document attached to the application (<c>portal.application_documents</c> + <c>portal.candidate_documents</c>).
+/// </summary>
+public sealed record ApplicationAttachedDocumentResponse(
+    Guid DocumentId,
+    string Kind,
+    string OriginalFilename,
+    string MimeType,
+    long SizeBytes,
+    DateTimeOffset AttachedAt);
+
+/// <summary>
+/// Represents the candidate's progress in a specific recruitment round (<c>portal.recruitment_stages</c> + <c>portal.application_stages</c>).
+/// </summary>
+public sealed record CandidateApplicationStageProgressResponse(
+    Guid StageId,
+    string Name,
+    string Kind,
+    int Position,
+    string? Description,
+    string Status,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    DateTimeOffset? UpdatedAt);
