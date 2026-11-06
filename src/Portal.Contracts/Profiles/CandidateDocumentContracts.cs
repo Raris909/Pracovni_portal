@@ -7,31 +7,36 @@ public static class CandidateDocumentKinds
     public const string Cv = "cv";
     public const string CoverLetter = "cover_letter";
     public const string Other = "other";
-}
 
-public static class CvFileRules
-{
-    public const string Extension = ".pdf";
-    public const string MimeType = "application/pdf";
-    public const long MaxSizeBytes = 10 * 1024 * 1024;
-    public const int MaxFilenameLength = 255;
-}
-
-public sealed class SetCurrentCvRequest : IValidatableObject
-{
-    public Guid? DocumentId { get; set; }
-
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    public static readonly IReadOnlySet<string> All = new HashSet<string>
     {
-        if (DocumentId == Guid.Empty)
-            yield return new ValidationResult("Use null to clear the current CV.", [nameof(DocumentId)]);
-    }
+        Cv,
+        CoverLetter,
+        Other
+    };
 }
 
 public sealed record CandidateDocumentResponse(
     Guid Id,
+    Guid CandidateId,
     string Kind,
     string OriginalFilename,
     string MimeType,
     long SizeBytes,
+    string Sha256,
+    bool IsCurrentCv,
     DateTimeOffset CreatedAt);
+
+public sealed record SetCurrentCvRequest(
+    [property: Required] Guid DocumentId) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (DocumentId == Guid.Empty)
+        {
+            yield return new ValidationResult(
+                "DocumentId must be a non-empty GUID.",
+                [nameof(DocumentId)]);
+        }
+    }
+}
