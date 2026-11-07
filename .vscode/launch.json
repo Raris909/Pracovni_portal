@@ -40,9 +40,6 @@
             "browser": "chrome",
             "presentation": {
                 "order": 3
-            },
-            "linux": {
-                "runtimeExecutable": "/var/lib/flatpak/exports/bin/com.google.Chrome"
             }
         }
     ]
