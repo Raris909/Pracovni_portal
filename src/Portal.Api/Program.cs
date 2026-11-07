@@ -39,6 +39,8 @@ builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileReposito
 
 builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
 
+builder.Services.AddScoped<ICompanyApplicationRepository, CompanyApplicationRepository>();
+
 builder.Services.Configure<DocumentStorageOptions>(
     builder.Configuration.GetSection(DocumentStorageOptions.SectionName));
 builder.Services.AddSingleton<IDocumentStorage, LocalFileSystemDocumentStorage>();
