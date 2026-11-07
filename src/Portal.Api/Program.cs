@@ -13,6 +13,7 @@ using Portal.Api.Companies;
 using Portal.Api.Health;
 using Portal.Api.Jobs;
 using Portal.Api.Profiles;
+using Portal.Api.Profiles.Storage;
 using Portal.Contracts.Auth;
 using Portal.Api.Applications;
 
@@ -35,8 +36,6 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
-
-builder.Services.AddScoped<IApplicationSubmissionService, ApplicationSubmissionService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
