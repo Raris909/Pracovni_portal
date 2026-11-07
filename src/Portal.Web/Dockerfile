@@ -12,3 +12,4 @@ FROM caddy:2-alpine AS final
 COPY deploy/Caddyfile /etc/caddy/Caddyfile
 COPY --from=build /app/wwwroot /srv
 EXPOSE 80 443
+ENTRYPOINT ["dotnet", "Portal.Web.dll"]

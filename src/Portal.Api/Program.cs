@@ -1,4 +1,6 @@
 using System.Text;
+using DotNetEnv;
+using DotNetEnv.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -18,6 +20,14 @@ using Portal.Contracts.Auth;
 using Portal.Api.Applications;
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (builder.Environment.IsDevelopment())
+{
+    var envPath = Path.GetFullPath("../../.env", builder.Environment.ContentRootPath);
+    builder.Configuration.AddDotNetEnv(envPath, LoadOptions.NoEnvVars())
+        .AddEnvironmentVariables()
+        .AddCommandLine(args);
+}
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
