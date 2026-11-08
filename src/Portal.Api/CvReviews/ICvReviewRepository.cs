@@ -4,13 +4,20 @@ namespace Portal.Api.CvReviews;
 
 public interface ICvReviewRepository
 {
-    // Candidate CV self-reviews (portal.candidate_cv_reviews)
     Task<CandidateCvReviewResponse> CreateCandidateReviewAsync(
         Guid candidateId,
         Guid documentId,
         string provider,
         string model,
         string promptVersion,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateCandidateReviewAsync(
+        Guid reviewId,
+        string status,
+        short? score,
+        CandidateCvReviewResultPayload? result,
+        string? errorMessage,
         CancellationToken cancellationToken = default);
 
     Task<CandidateCvReviewResponse?> GetCandidateReviewByIdAsync(
@@ -22,7 +29,6 @@ public interface ICvReviewRepository
         Guid candidateId,
         CancellationToken cancellationToken = default);
 
-    // Company Application CV reviews (portal.application_cv_reviews)
     Task<ApplicationCvReviewResponse> CreateApplicationReviewAsync(
         Guid companyId,
         Guid applicationId,
@@ -33,6 +39,14 @@ public interface ICvReviewRepository
         string model,
         string promptVersion,
         JobRequirementsSnapshot jobRequirementsSnapshot,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateApplicationReviewAsync(
+        Guid reviewId,
+        string status,
+        short? score,
+        ApplicationCvReviewResultPayload? result,
+        string? errorMessage,
         CancellationToken cancellationToken = default);
 
     Task<ApplicationCvReviewResponse?> GetApplicationReviewByIdAsync(
