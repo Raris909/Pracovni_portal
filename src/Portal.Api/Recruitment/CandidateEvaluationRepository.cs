@@ -153,7 +153,6 @@ public sealed class CandidateEvaluationRepository(NpgsqlDataSource database) : I
         if (memberId is null)
             return (null, CandidateEvaluationStatus.StageNotFound);
 
-        // Coordinate feedback with R03 progress changes and application closure.
         await using var applicationCommand = new NpgsqlCommand("""
             SELECT status FROM portal.applications WHERE company_id = $1 AND id = $2 FOR UPDATE
             """, connection, transaction);

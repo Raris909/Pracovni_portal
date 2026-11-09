@@ -105,11 +105,6 @@ flowchart TD
 
 - JSON: `camelCase`; validační a aplikační chyby: Problem Details (`application/problem+json`).
 - Nabídky: `offset ≥ 0`, `limit 1–100`; neplatné hodnoty → `400`.
-- Náborová kola: [kontrakt R02](contracts/recruitment-stages.md); definice a pořadí jsou oddělené od přiřazení kol přihláškám (R03).
-- Kola přihlášky: [kontrakt R03](contracts/application-stages.md); z `pending` lze přejít do `in_progress` i přímo na výsledek. Ukončená kola se znovu neotevírají; celkový stav přihlášky se automaticky nemění.
-- HR hodnocení: [kontrakt R04](contracts/candidate-evaluations.md); čtení v rámci firmy, úpravy pouze autorem, skóre `0..100` nebo `null` a povinná poznámka. Hodnocení nemění stav kola ani přihlášky.
-- Termíny pohovorů: [kontrakt R05](contracts/interview-slots.md); překryvy účtu HR se hlídají i napříč firmami. Mazání deaktivuje a obsazené termíny jsou chráněné (`409`).
-- Rezervace uchazeče: [kontrakt R06](contracts/interview-bookings.md); vlastní přihláška a přiřazené kolo, nejvýše jedna nezrušená rezervace termínu a kola, žádné překryvy uchazeče. Transakce a zámek termínu koordinují rezervace se správou HR.
 - Datové modely kontraktů: [AuthContracts.cs](../src/Portal.Contracts/Auth/AuthContracts.cs), [CompanyContracts.cs](../src/Portal.Contracts/Companies/CompanyContracts.cs), [JobOfferContracts.cs](../src/Portal.Contracts/Jobs/JobOfferContracts.cs).
 
 ## Přihlášení a oprávnění

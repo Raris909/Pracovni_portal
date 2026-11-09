@@ -135,7 +135,6 @@ public sealed class ApplicationStageRepository(NpgsqlDataSource database) : IApp
         if (await memberCommand.ExecuteScalarAsync(cancellationToken) is null)
             return null;
 
-        // Keep R02 definitions stable and serialize progress changes for this application.
         await using var command = new NpgsqlCommand("""
             SELECT app.job_offer_id, app.status FROM portal.applications app
             JOIN portal.job_offers j ON j.id = app.job_offer_id AND j.company_id = app.company_id

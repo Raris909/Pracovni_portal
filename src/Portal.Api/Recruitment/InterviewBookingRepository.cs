@@ -105,7 +105,6 @@ public sealed class InterviewBookingRepository(NpgsqlDataSource database) : IInt
         if (!await LockSlotAsync(connection, transaction, context.Value.JobId, stageId, request.SlotId, cancellationToken))
             return (null, InterviewBookingStatus.SlotNotFound);
 
-        // Read availability after acquiring the slot lock, including any R05 change committed while waiting.
         await using var slotCommand = new NpgsqlCommand("""
             SELECT s.starts_at, s.ends_at, s.is_active AND s.starts_at > clock_timestamp()
             FROM portal.interview_slots s
