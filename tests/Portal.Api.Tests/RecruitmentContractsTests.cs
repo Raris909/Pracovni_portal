@@ -33,6 +33,18 @@ public sealed class RecruitmentContractsTests
     }
 
     [Fact]
+    public void ReorderRecruitmentStagesRequest_RequiresNonEmptyUniqueIds()
+    {
+        var id = Guid.NewGuid();
+        Guid[][] invalidOrders = [[], [Guid.Empty], [id, id]];
+        foreach (var ids in invalidOrders)
+            Assert.NotEmpty(ValidateModel(new ReorderRecruitmentStagesRequest(ids)));
+
+        Assert.NotEmpty(ValidateModel(new ReorderRecruitmentStagesRequest(null!)));
+        Assert.Empty(ValidateModel(new ReorderRecruitmentStagesRequest([id, Guid.NewGuid()])));
+    }
+
+    [Fact]
     public void UpdateApplicationStageStatusRequest_InProgressWithoutStartedAt_FailsValidation()
     {
         var request = new UpdateApplicationStageStatusRequest(
@@ -78,17 +90,43 @@ public sealed class RecruitmentContractsTests
     }
 
     [Theory]
+    [InlineData(null, false, false, false)]
+    [InlineData("accepted", true, true, false)]
+    [InlineData("pending", false, false, true)]
+    [InlineData("pending", true, false, true)]
+    [InlineData("pending", true, true, false)]
+    [InlineData("in_progress", true, false, true)]
+    [InlineData("in_progress", true, true, false)]
+    [InlineData("failed", true, true, true)]
+    [InlineData("failed", false, true, false)]
+    [InlineData("skipped", true, true, true)]
+    [InlineData("skipped", true, false, false)]
+    public void UpdateApplicationStageStatusRequest_ValidatesStatusAndTimestamps(
+        string? status, bool hasStartedAt, bool hasCompletedAt, bool expectedValid)
+    {
+        var startedAt = DateTimeOffset.Parse("2026-10-01T10:00:00Z");
+        var request = new UpdateApplicationStageStatusRequest(
+            status!, hasStartedAt ? startedAt : null, hasCompletedAt ? startedAt.AddHours(1) : null);
+
+        Assert.Equal(expectedValid, ValidateModel(request).Count == 0);
+    }
+
+    [Theory]
+    [InlineData(null, "Poznámka bez skóre.", true)]
+    [InlineData(0, "Dolní hranice.", true)]
+    [InlineData(100, "Horní hranice.", true)]
+    [InlineData(50, null, false)]
     [InlineData(105, "Skóre mimo rozsah.", false)]
     [InlineData(-5, "Záporné skóre.", false)]
     [InlineData(50, "   ", false)]
     [InlineData(85, "Výborná komunikace a znalost C#.", true)]
     public void UpsertCandidateEvaluationRequest_ValidatesCorrectly(
         int? score,
-        string note,
+        string? note,
         bool expectedValid)
     {
         short? shortScore = score.HasValue ? (short)score.Value : null;
-        var request = new UpsertCandidateEvaluationRequest(shortScore, note);
+        var request = new UpsertCandidateEvaluationRequest(shortScore, note!);
         var errors = ValidateModel(request);
 
         Assert.Equal(expectedValid, errors.Count == 0);
@@ -106,6 +144,43 @@ public sealed class RecruitmentContractsTests
         var errors = ValidateModel(request);
 
         Assert.Contains(errors, e => e.MemberNames.Contains(nameof(UpsertInterviewSlotRequest.EndsAt)));
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("https://meet.example.com/interview", true)]
+    [InlineData("http://meet.example.com/interview", true)]
+    [InlineData("javascript:alert(1)", false)]
+    [InlineData("relative/path", false)]
+    [InlineData("", false)]
+    [InlineData("ftp://example.com/interview", false)]
+    public void UpsertInterviewSlotRequest_ValidatesMeetingUrl(string? url, bool expectedValid)
+    {
+        var start = DateTimeOffset.Parse("2027-01-15T10:00:00Z");
+        var request = new UpsertInterviewSlotRequest(Guid.NewGuid(), start, start.AddHours(1), MeetingUrl: url);
+        Assert.Equal(expectedValid, ValidateModel(request).Count == 0);
+    }
+
+    [Fact]
+    public void UpsertInterviewSlotRequest_RequiresMemberDatesAndARepresentableDuration()
+    {
+        var start = DateTimeOffset.Parse("2027-01-15T10:00:00Z");
+        var valid = new UpsertInterviewSlotRequest(Guid.NewGuid(), start, start.AddHours(1));
+        UpsertInterviewSlotRequest[] invalidRequests =
+        [
+            valid with { InterviewerMemberId = Guid.Empty }, valid with { StartsAt = default },
+            valid with { EndsAt = default }, valid with { EndsAt = start.AddTicks(1) }
+        ];
+        foreach (var request in invalidRequests)
+            Assert.NotEmpty(ValidateModel(request));
+        Assert.Empty(ValidateModel(valid with { EndsAt = start.AddTicks(TimeSpan.TicksPerMicrosecond) }));
+    }
+
+    [Fact]
+    public void CreateInterviewBookingRequest_RequiresANonEmptySlotId()
+    {
+        Assert.NotEmpty(ValidateModel(new CreateInterviewBookingRequest(Guid.Empty)));
+        Assert.Empty(ValidateModel(new CreateInterviewBookingRequest(Guid.NewGuid())));
     }
 
     [Fact]

@@ -13,6 +13,7 @@ using Portal.Api.Companies;
 using Portal.Api.Health;
 using Portal.Api.Jobs;
 using Portal.Api.Profiles;
+using Portal.Api.Recruitment;
 using Portal.Api.Profiles.Storage;
 using Portal.Contracts.Auth;
 using Portal.Api.Applications;
@@ -36,6 +37,11 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
+builder.Services.AddScoped<IRecruitmentStageRepository, RecruitmentStageRepository>();
+builder.Services.AddScoped<IApplicationStageRepository, ApplicationStageRepository>();
+builder.Services.AddScoped<ICandidateEvaluationRepository, CandidateEvaluationRepository>();
+builder.Services.AddScoped<IInterviewSlotRepository, InterviewSlotRepository>();
+builder.Services.AddScoped<IInterviewBookingRepository, InterviewBookingRepository>();
 
 builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
 
