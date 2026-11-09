@@ -14,7 +14,9 @@ using Portal.Api.Health;
 using Portal.Api.Jobs;
 using Portal.Api.Profiles;
 using Portal.Api.Recruitment;
+using Portal.Api.Profiles.Storage;
 using Portal.Contracts.Auth;
+using Portal.Api.Applications;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -40,6 +42,14 @@ builder.Services.AddScoped<IApplicationStageRepository, ApplicationStageReposito
 builder.Services.AddScoped<ICandidateEvaluationRepository, CandidateEvaluationRepository>();
 builder.Services.AddScoped<IInterviewSlotRepository, InterviewSlotRepository>();
 builder.Services.AddScoped<IInterviewBookingRepository, InterviewBookingRepository>();
+
+builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
+
+builder.Services.Configure<DocumentStorageOptions>(
+    builder.Configuration.GetSection(DocumentStorageOptions.SectionName));
+builder.Services.AddSingleton<IDocumentStorage, LocalFileSystemDocumentStorage>();
+builder.Services.AddScoped<ICandidateDocumentRepository, CandidateDocumentRepository>();
+builder.Services.AddScoped<CandidateCvService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
