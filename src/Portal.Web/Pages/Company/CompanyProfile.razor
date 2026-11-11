@@ -1,0 +1,153 @@
+@page "/company/profile"
+@using Portal.Contracts.Companies
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Profil firmy</PageTitle>
+
+<h1>Profil firmy</h1>
+
+@if (loading)
+{
+    <p>Načítání profilu…</p>
+}
+else if (error is not null)
+{
+    <p role="alert" style="color: red;">@error</p>
+}
+else
+{
+    @if (successMessage is not null)
+    {
+        <p role="status" style="color: green;">@successMessage</p>
+    }
+
+    <EditForm Model="model" OnValidSubmit="SaveAsync">
+        <DataAnnotationsValidator />
+        <ValidationSummary />
+
+        <div>
+            <label for="name">Název firmy *</label>
+            <InputText id="name" @bind-Value="model.Name" />
+        </div>
+
+        <div>
+            <label for="reg-num">IČO / Reg. číslo</label>
+            <InputText id="reg-num" @bind-Value="model.RegistrationNumber" />
+        </div>
+
+        <div>
+            <label for="country">Kód země (např. CZ, SK) *</label>
+            <InputText id="country" @bind-Value="model.CountryCode" placeholder="CZ" />
+        </div>
+
+        <div>
+            <label for="website">Webové stránky</label>
+            <InputText id="website" type="url" @bind-Value="model.WebsiteUrl" placeholder="https://example.com" />
+        </div>
+
+        <div>
+            <label for="address">Adresa</label>
+            <InputText id="address" @bind-Value="model.Address" />
+        </div>
+
+        <div>
+            <label for="description">Popis firmy</label>
+            <InputTextArea id="description" @bind-Value="model.Description" rows="5" cols="45" />
+        </div>
+
+        <button type="submit" disabled="@saving">
+            @(saving ? "Ukládám…" : (hasCompany ? "Uložit změny" : "Vytvořit firmu"))
+        </button>
+    </EditForm>
+}
+
+@code {
+    private CreateCompanyRequest model = new();
+    private bool hasCompany;
+    private bool loading = true;
+    private bool saving;
+    private string? error;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        try
+        {
+            // Načtení detailu mojeho členství a firmy
+            var membership = await Http.GetFromJsonAsync<CompanyMembershipResponse>("api/companies/me");
+            if (membership is not null)
+            {
+                hasCompany = true;
+                model = new CreateCompanyRequest
+                {
+                    Name = membership.Company.Name,
+                    RegistrationNumber = membership.Company.RegistrationNumber,
+                    CountryCode = membership.Company.CountryCode,
+                    Description = membership.Company.Description,
+                    WebsiteUrl = membership.Company.WebsiteUrl,
+                    Address = membership.Company.Address
+                };
+            }
+        }
+        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            // Firma zatím neexistuje – uživatel ji může vytvořit
+            hasCompany = false;
+            model.CountryCode = "CZ"; // Výchozí hodnota
+        }
+        catch (HttpRequestException)
+        {
+            error = "Údaje o firmě se nepodařilo načíst.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            HttpResponseMessage response;
+            if (hasCompany)
+            {
+                response = await Http.PutAsJsonAsync("api/companies/me", model);
+            }
+            else
+            {
+                response = await Http.PostAsJsonAsync("api/companies", model);
+            }
+
+            if (response.IsSuccessStatusCode)
+            {
+                hasCompany = true;
+                successMessage = "Údaje o firmě byly úspěšně uloženy.";
+            }
+            else
+            {
+                error = "Uložení se nepodařilo. Zkontrolujte vyplněná data.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

@@ -1,0 +1,190 @@
+@page "/company/team"
+@using Portal.Contracts.Companies
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>HR Tým</PageTitle>
+
+<h1>Správa HR týmu</h1>
+
+@if (loading)
+{
+    <p>Načítání členů týmu…</p>
+}
+else
+{
+    <section>
+        <h2>Pozvat nového člena</h2>
+        <EditForm Model="inviteModel" OnValidSubmit="InviteMemberAsync">
+            <DataAnnotationsValidator />
+
+            <div>
+                <label for="invite-email">E-mail</label>
+                <InputText id="invite-email" type="email" @bind-Value="inviteModel.Email" placeholder="kolega@firma.cz" />
+            </div>
+
+            <div>
+                <label for="invite-role">Role</label>
+                <InputSelect id="invite-role" @bind-Value="inviteModel.Role">
+                    <option value="@CompanyMemberRoles.Recruiter">Náborář (Recruiter)</option>
+                    <option value="@CompanyMemberRoles.Admin">Správce (Admin)</option>
+                </InputSelect>
+            </div>
+
+            <button type="submit" disabled="@inviting">Pozvat do týmu</button>
+            <ValidationSummary />
+        </EditForm>
+
+        @if (inviteError is not null)
+        {
+            <p role="alert" style="color: red;">@inviteError</p>
+        }
+        @if (inviteSuccess is not null)
+        {
+            <p role="status" style="color: green;">@inviteSuccess</p>
+        }
+    </section>
+
+    <hr />
+
+    <section>
+        <h2>Členové týmu</h2>
+        @if (members is null || members.Count == 0)
+        {
+            <p>V týmu zatím nejste sami nebo se nepodařilo načíst seznam.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jméno a příjmení</th>
+                        <th>E-mail</th>
+                        <th>Role</th>
+                        <th>Stav</th>
+                        <th>Akce</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in members)
+                    {
+                        <tr>
+                            <td>@member.FirstName @member.LastName</td>
+                            <td>@member.Email</td>
+                            <td>
+                                @if (member.Role == CompanyMemberRoles.Owner)
+                                {
+                                    <span>Vlastník (Owner)</span>
+                                }
+                                else
+                                {
+                                    <select value="@member.Role" @onchange="e => ChangeRoleAsync(member.Id, e.Value?.ToString())">
+                                        <option value="@CompanyMemberRoles.Recruiter">Recruiter</option>
+                                        <option value="@CompanyMemberRoles.Admin">Admin</option>
+                                    </select>
+                                }
+                            </td>
+                            <td>@(member.IsActive ? "Aktivní" : "Neaktivní")</td>
+                            <td>
+                                @if (member.Role != CompanyMemberRoles.Owner)
+                                {
+                                    <button type="button" @onclick="() => RemoveMemberAsync(member.Id)">Odebrat</button>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+}
+
+@code {
+    private List<CompanyMemberResponse>? members;
+    private AddCompanyMemberRequest inviteModel = new();
+    private bool loading = true;
+    private bool inviting;
+    private string? inviteError;
+    private string? inviteSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        await LoadTeamAsync();
+    }
+
+    private async Task LoadTeamAsync()
+    {
+        loading = true;
+        try
+        {
+            members = await Http.GetFromJsonAsync<List<CompanyMemberResponse>>("api/companies/me/members");
+        }
+        catch (HttpRequestException)
+        {
+            // Ošetření případné chyby
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task InviteMemberAsync()
+    {
+        inviting = true;
+        inviteError = null;
+        inviteSuccess = null;
+
+        try
+        {
+            var response = await Http.PostAsJsonAsync("api/companies/me/members", inviteModel);
+            if (response.IsSuccessStatusCode)
+            {
+                inviteSuccess = "Pozvánka byla úspěšně odeslána.";
+                inviteModel = new AddCompanyMemberRequest(); // Reset formuláře
+                await LoadTeamAsync();
+            }
+            else
+            {
+                inviteError = "Člena se nepodařilo pozvat. Ujistěte se, že e-mail je platný a uživatel již v týmu neexistuje.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            inviteError = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            inviting = false;
+        }
+    }
+
+    private async Task ChangeRoleAsync(Guid memberId, string? newRole)
+    {
+        if (string.IsNullOrEmpty(newRole)) return;
+
+        var request = new UpdateCompanyMemberRequest { Role = newRole };
+        var response = await Http.PutAsJsonAsync($"api/companies/me/members/{memberId}", request);
+
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadTeamAsync();
+        }
+    }
+
+    private async Task RemoveMemberAsync(Guid memberId)
+    {
+        var response = await Http.DeleteAsync($"api/companies/me/members/{memberId}");
+        if (response.IsSuccessStatusCode)
+        {
+            await LoadTeamAsync();
+        }
+    }
+}

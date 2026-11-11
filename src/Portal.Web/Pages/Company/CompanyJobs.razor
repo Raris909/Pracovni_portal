@@ -1,0 +1,147 @@
+@page "/company/jobs"
+@using Portal.Contracts.Jobs
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Správa nabídky práce</PageTitle>
+
+<div>
+    <h1>Správa pracovních pozic</h1>
+    <a href="company/jobs/new">Vytvořit novou pozici</a>
+</div>
+
+@if (loading)
+{
+    <p>Načítání pozic…</p>
+}
+else if (error is not null)
+{
+    <p role="alert" style="color: red;">@error</p>
+}
+else if (jobs is null || jobs.Count == 0)
+{
+    <p>Zatím jste nevytvořili žádné pracovní nabídky.</p>
+}
+else
+{
+    <table>
+        <thead>
+            <tr>
+                <th>Název pozice</th>
+                <th>Režim práce</th>
+                <th>Typ úvazku</th>
+                <th>Stav</th>
+                <th>Vytvořeno</th>
+                <th>Akce</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var job in jobs)
+            {
+                <tr>
+                    <td><strong>@job.Title</strong></td>
+                    <td>@GetWorkModeLabel(job.WorkMode)</td>
+                    <td>@GetEmploymentTypeLabel(job.EmploymentType)</td>
+                    <td>@GetStatusLabel(job.Status)</td>
+                    <td>@job.CreatedAt.ToString("d.M.yyyy")</td>
+                    <td>
+                        <a href="@($"company/jobs/edit/{job.Id}")">Upravit</a>
+
+                        @if (job.Status == JobOfferStatuses.Draft)
+                        {
+                            <button type="button" @onclick="() => PublishAsync(job.Id)">Publikovat</button>
+                        }
+                        else if (job.Status == JobOfferStatuses.Published)
+                        {
+                            <button type="button" @onclick="() => CloseAsync(job.Id)">Uzavřít</button>
+                        }
+
+                        @if (job.Status != JobOfferStatuses.Archived)
+                        {
+                            <button type="button" @onclick="() => ArchiveAsync(job.Id)">Archivovat</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+@code {
+    private List<JobOfferManagementResponse>? jobs;
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        await LoadJobsAsync();
+    }
+
+    private async Task LoadJobsAsync()
+    {
+        loading = true;
+        try
+        {
+            jobs = await Http.GetFromJsonAsync<List<JobOfferManagementResponse>>("api/companies/me/jobs");
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nepodařilo se načíst seznam pracovních nabídek.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task PublishAsync(Guid id)
+    {
+        var response = await Http.PostAsync($"api/companies/me/jobs/{id}/publish", null);
+        if (response.IsSuccessStatusCode) await LoadJobsAsync();
+    }
+
+    private async Task CloseAsync(Guid id)
+    {
+        var response = await Http.PostAsync($"api/companies/me/jobs/{id}/close", null);
+        if (response.IsSuccessStatusCode) await LoadJobsAsync();
+    }
+
+    private async Task ArchiveAsync(Guid id)
+    {
+        var response = await Http.PostAsync($"api/companies/me/jobs/{id}/archive", null);
+        if (response.IsSuccessStatusCode) await LoadJobsAsync();
+    }
+
+    private static string GetWorkModeLabel(string mode) => mode switch
+    {
+        WorkModes.Onsite => "Na pracovišti",
+        WorkModes.Hybrid => "Hrabridní",
+        WorkModes.Remote => "Vzdálená práce",
+        _ => mode
+    };
+
+    private static string GetEmploymentTypeLabel(string type) => type switch
+    {
+        EmploymentTypes.FullTime => "Plný úvazek",
+        EmploymentTypes.PartTime => "Zkrácený úvazek",
+        EmploymentTypes.Contract => "Kontrakt / IČO",
+        EmploymentTypes.Internship => "Stáž",
+        _ => type
+    };
+
+    private static string GetStatusLabel(string status) => status switch
+    {
+        JobOfferStatuses.Draft => "Koncept",
+        JobOfferStatuses.Published => "Publikováno",
+        JobOfferStatuses.Closed => "Uzavřeno",
+        JobOfferStatuses.Archived => "Archivováno",
+        _ => status
+    };
+}
