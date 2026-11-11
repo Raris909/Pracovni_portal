@@ -25,10 +25,10 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
-      ConnectionStrings__Portal: Host=db;Database=portal;Username=portal;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
-      Jwt__Issuer: Portal.Api
-      Jwt__Audience: Portal.Clients
-      Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      CONNECTIONSTRINGS__PORTAL: Host=db;Database=portal;Username=portal;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      JWT__ISSUER: Portal.Api
+      JWT__AUDIENCE: Portal.Clients
+      JWT__SIGNINGKEY: ${JWT__SIGNINGKEY:?Set JWT__SIGNINGKEY in .env}
     depends_on:
       db:
         condition: service_healthy
