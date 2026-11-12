@@ -29,6 +29,10 @@ services:
       Jwt__Issuer: Portal.Api
       Jwt__Audience: Portal.Clients
       Jwt__SigningKey: ${JWT_SIGNING_KEY:?Set JWT_SIGNING_KEY in .env}
+      GEMINI__APIKEY: ${GEMINI__APIKEY}
+      GEMINI__MODEL: ${GEMINI__MODEL}
+    volumes:
+      - ./artifacts/app_data:/app/App_Data
     depends_on:
       db:
         condition: service_healthy

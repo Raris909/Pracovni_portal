@@ -1,6 +1,14 @@
+using Portal.Api.Ai;
 using Portal.Contracts.CvReviews;
 
 namespace Portal.Api.CvReviews;
+
+public sealed record ApplicationCvDocumentContext(
+    Guid CandidateId,
+    Guid DocumentId,
+    string StorageKey,
+    string MimeType,
+    JobRequirementsSnapshot JobRequirements);
 
 public interface ICvReviewRepository
 {
@@ -18,6 +26,7 @@ public interface ICvReviewRepository
         short? score,
         CandidateCvReviewResultPayload? result,
         string? errorMessage,
+        AiMetadata? metadata = null,
         CancellationToken cancellationToken = default);
 
     Task<CandidateCvReviewResponse?> GetCandidateReviewByIdAsync(
@@ -27,6 +36,17 @@ public interface ICvReviewRepository
 
     Task<IReadOnlyList<CandidateCvReviewSummaryResponse>> GetCandidateReviewsAsync(
         Guid candidateId,
+        CancellationToken cancellationToken = default);
+
+    Task<Guid?> GetActiveCompanyMemberIdAsync(
+        Guid companyId,
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApplicationCvDocumentContext?> GetApplicationCvContextAsync(
+        Guid companyId,
+        Guid applicationId,
+        Guid? documentId,
         CancellationToken cancellationToken = default);
 
     Task<ApplicationCvReviewResponse> CreateApplicationReviewAsync(
@@ -47,6 +67,7 @@ public interface ICvReviewRepository
         short? score,
         ApplicationCvReviewResultPayload? result,
         string? errorMessage,
+        AiMetadata? metadata = null,
         CancellationToken cancellationToken = default);
 
     Task<ApplicationCvReviewResponse?> GetApplicationReviewByIdAsync(
