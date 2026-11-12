@@ -11,6 +11,7 @@ RUN dotnet publish src/Portal.Api/Portal.Api.csproj -c Release --no-restore -o /
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 COPY --from=build /app ./
+RUN mkdir -p /app/App_Data && chown -R $APP_UID:$APP_UID /app/App_Data
 USER $APP_UID
 EXPOSE 8080
 ENTRYPOINT ["dotnet", "Portal.Api.dll"]
