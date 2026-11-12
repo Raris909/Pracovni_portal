@@ -12,10 +12,12 @@ database_password=$(openssl rand -hex 32)
 signing_key=$(openssl rand -hex 32)
 cat > .env <<EOF
 POSTGRES_PASSWORD=$database_password
-JWT_SIGNING_KEY=$signing_key
+CONNECTIONSTRINGS__PORTAL="Host=localhost;Port=5433;Database=portal;Username=portal;Password=\${POSTGRES_PASSWORD}"
+JWT__SIGNINGKEY=$signing_key
 SITE_ADDRESS=localhost
 HTTP_PORT=80
 HTTPS_PORT=443
+COMPOSE_PATH_SEPARATOR=;
 COMPOSE_FILE=compose.yaml;compose.dev.yaml
 EOF
 echo 'Created .env with random development secrets.'

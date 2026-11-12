@@ -73,6 +73,25 @@ flowchart TD
 | `PUT /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Nahrazení editovatelných údajů konceptu; jiný stav nabídky `409` |
 | `GET /api/companies/{companyId}/jobs?offset=0&limit=20` | Aktivní účet `company` a členství | Nabídky vlastní firmy ve všech stavech |
 | `GET /api/companies/{companyId}/jobs/{jobId}` | Aktivní účet `company` a členství | Detail nabídky pro správu; cizí či neexistující nabídka `404` |
+| `GET /api/companies/{companyId}/jobs/{jobId}/stages` | Aktivní účet `company` a členství | Náborová kola nabídky podle pořadí |
+| `POST /api/companies/{companyId}/jobs/{jobId}/stages` | Aktivní účet `company` a členství | Definice nového kola; `201`, obsazená pozice `409` |
+| `PUT /api/companies/{companyId}/jobs/{jobId}/stages/{stageId}` | Aktivní účet `company` a členství | Úprava definice kola; konflikt pozice nebo změna typu použitého kola `409` |
+| `DELETE /api/companies/{companyId}/jobs/{jobId}/stages/{stageId}` | Aktivní účet `company` a členství | Smazání nepoužitého kola; `204`, použité kolo `409` |
+| `PUT /api/companies/{companyId}/jobs/{jobId}/stages/order` | Aktivní účet `company` a členství | Atomické přeskládání všech kol nabídky na pozice `1..N`; neplatný seznam `400` |
+| `GET /api/companies/{companyId}/applications/{applicationId}/stages` | Aktivní účet `company` a členství | Přiřazená kola přihlášky podle pořadí, včetně postupu a výsledků |
+| `PUT /api/companies/{companyId}/applications/{applicationId}/stages/{stageId}` | Aktivní účet `company` a členství | Přiřazení kola stejné nabídky; nové `201`, existující `200` beze změny |
+| `PATCH /api/companies/{companyId}/applications/{applicationId}/stages/{stageId}/status` | Aktivní účet `company` a členství | Záznam postupu/výsledku kola; neplatný přechod nebo ukončená přihláška `409` |
+| `GET /api/companies/{companyId}/applications/{applicationId}/stages/{stageId}/evaluations` | Aktivní účet `company` a členství | Interní HR hodnocení přiřazeného kola |
+| `POST /api/companies/{companyId}/applications/{applicationId}/stages/{stageId}/evaluations` | Aktivní účet `company` a členství | Nové hodnocení s volitelným skóre a povinnou poznámkou; `201` |
+| `PUT /api/companies/{companyId}/applications/{applicationId}/stages/{stageId}/evaluations/{evaluationId}` | Aktivní účet `company`, členství a autorství | Úprava vlastního hodnocení; cizí autor `403`, ukončená přihláška `409` |
+| `GET /api/companies/{companyId}/jobs/{jobId}/stages/{stageId}/slots` | Aktivní účet `company` a členství | Aktivní i neaktivní termíny kola typu pohovor |
+| `POST /api/companies/{companyId}/jobs/{jobId}/stages/{stageId}/slots` | Aktivní účet `company` a členství | Nový termín aktivního HR stejné firmy; `201`, překryv `409` |
+| `PUT /api/companies/{companyId}/jobs/{jobId}/stages/{stageId}/slots/{slotId}` | Aktivní účet `company` a členství | Úprava termínu nebo jeho reaktivace; překryv či rezervace `409` |
+| `DELETE /api/companies/{companyId}/jobs/{jobId}/stages/{stageId}/slots/{slotId}` | Aktivní účet `company` a členství | Deaktivace neobsazeného termínu se zachováním historie; `204`, obsazený `409` |
+| `GET /api/applications/{applicationId}/stages/{stageId}/slots` | Aktivní účet `candidate`, vlastní přihláška a přiřazené kolo pohovoru | Dostupné budoucí termíny bez překryvu uchazeče |
+| `GET /api/applications/{applicationId}/stages/{stageId}/bookings` | Aktivní účet `candidate`, vlastní přihláška a přiřazené kolo pohovoru | Vlastní rezervace včetně historie zrušení |
+| `POST /api/applications/{applicationId}/stages/{stageId}/bookings` | Aktivní účet `candidate`, vlastní přihláška a přiřazené kolo pohovoru | Rezervace dostupného termínu; `201`, duplicita nebo nedostupnost `409` |
+| `DELETE /api/applications/{applicationId}/stages/{stageId}/bookings/{bookingId}` | Aktivní účet `candidate`, vlastní rezervace | Zrušení budoucí potvrzené rezervace; `204`, nepovolený stav nebo uplynulý začátek `409` |
 | `POST /api/companies/{companyId}/jobs/{jobId}/publish` | Aktivní účet `company` a členství | Publikace konceptu s budoucím nebo neurčeným deadlinem; `200` + detail, nepovolený stav či uplynulý deadline `409` |
 | `POST /api/companies/{companyId}/jobs/{jobId}/close` | Aktivní účet `company` a členství | Uzavření publikované nabídky se zachováním `publishedAt`; `200` + detail, nepovolený stav `409` |
 | `GET /api/companies/{companyId}/members` | Aktivní účet `company` a členství | Seznam aktivních členství HR týmu |
