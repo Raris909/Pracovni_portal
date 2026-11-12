@@ -19,5 +19,7 @@ HTTP_PORT=80
 HTTPS_PORT=443
 COMPOSE_PATH_SEPARATOR=;
 COMPOSE_FILE=compose.yaml;compose.dev.yaml
+GEMINI__APIKEY=
+GEMINI__MODEL=
 EOF
 echo 'Created .env with random development secrets.'

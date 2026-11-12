@@ -19,6 +19,8 @@ Spuštění: [rychlý start](README.md). Konfigurace: [.env.example](../.env.exa
 | `CONNECTIONSTRINGS__PORTAL` | Lokální API: `localhost:5433`; heslo z `${POSTGRES_PASSWORD}` |
 | `SITE_ADDRESS` | `localhost` nebo veřejná doména |
 | `HTTP_PORT`, `HTTPS_PORT` | Výchozí `80`, `443` |
+| `GEMINI__APIKEY` | API klíč vygenerovaný v AI studiu |
+| `GEMINI__MODEL` | Model geminy, který chcete použít například `gemini-3.6-flash` nebo `gemini-3.8-flash` |
 
 - `.env` necommitovat; setup existující soubor nepřepisuje.
 - Compose nastavuje API připojení na `db:5432`.
