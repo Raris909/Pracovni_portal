@@ -1,0 +1,295 @@
+@page "/company/team"
+@page "/company/{CompanyId:guid}/team"
+@using System.Net
+@using Portal.Contracts.Auth
+@using Portal.Contracts.Companies
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>HR Tým</PageTitle>
+
+<h1>Správa HR týmu</h1>
+
+@if (loading)
+{
+    <p>Načítání…</p>
+}
+else if (companies is null || companies.Count == 0)
+{
+    <p>Nejste členem žádné firmy. Nejprve si <a href="company/profile">založte firmu</a>.</p>
+}
+else
+{
+    @if (companies.Count > 1)
+    {
+        <div>
+            <label for="company-select">Vyberte firmu:</label>
+            <select id="company-select" value="@selectedCompanyId" @onchange="OnCompanyChanged">
+                @foreach (var item in companies)
+                {
+                    <option value="@item.Company.Id">@item.Company.Name (@item.Membership.Role)</option>
+                }
+            </select>
+        </div>
+        <hr />
+    }
+
+    @if (canManageTeam)
+    {
+        <section>
+            <h2>Přidat člena do týmu</h2>
+            <EditForm Model="inviteModel" OnValidSubmit="AddMemberAsync">
+                <DataAnnotationsValidator />
+
+                <div>
+                    <label for="invite-email">E-mail registrovaného firemního uživatele</label>
+                    <InputText id="invite-email" type="email" @bind-Value="inviteModel.Email" placeholder="kolega@firma.cz" />
+                </div>
+
+                <div>
+                    <label for="invite-role">Role</label>
+                    <InputSelect id="invite-role" @bind-Value="inviteModel.Role">
+                        <option value="@CompanyMemberRoles.Recruiter">Náborář (Recruiter)</option>
+                        <option value="@CompanyMemberRoles.Admin">Správce (Admin)</option>
+                    </InputSelect>
+                </div>
+
+                <button type="submit" disabled="@busy">Přidat člena</button>
+                <ValidationSummary />
+            </EditForm>
+
+            @if (actionError is not null)
+            {
+                <p role="alert" style="color: red;">@actionError</p>
+            }
+            @if (actionSuccess is not null)
+            {
+                <p role="status" style="color: green;">@actionSuccess</p>
+            }
+        </section>
+        <hr />
+    }
+
+    <section>
+        <h2>Členové týmu (@currentCompanyName)</h2>
+        @if (members is null || members.Count == 0)
+        {
+            <p>Žádní aktivní členové.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Jméno</th>
+                        <th>E-mail</th>
+                        <th>Role</th>
+                        @if (canManageTeam)
+                        {
+                            <th>Akce</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var member in members)
+                    {
+                        <tr>
+                            <td>@member.FirstName @member.LastName</td>
+                            <td>@member.Email</td>
+                            <td>
+                                @if (!canManageTeam || member.Role == CompanyMemberRoles.Owner)
+                                {
+                                    <span>@member.Role</span>
+                                }
+                                else
+                                {
+                                    <select value="@member.Role" disabled="@busy"
+                                            @onchange="e => ChangeRoleAsync(member.Id, e.Value?.ToString())">
+                                        <option value="@CompanyMemberRoles.Recruiter">recruiter</option>
+                                        <option value="@CompanyMemberRoles.Admin">admin</option>
+                                    </select>
+                                }
+                            </td>
+                            @if (canManageTeam)
+                            {
+                                <td>
+                                    @if (member.Role != CompanyMemberRoles.Owner)
+                                    {
+                                        <button type="button" disabled="@busy" @onclick="() => RemoveMemberAsync(member.Id)">
+                                            Odebrat
+                                        </button>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid? CompanyId { get; set; }
+
+    private List<CompanyMembershipResponse>? companies;
+    private List<CompanyMemberResponse>? members;
+    private AddCompanyMemberRequest inviteModel = new();
+
+    private Guid selectedCompanyId;
+    private string currentCompanyName = "";
+    private bool canManageTeam;
+    private bool loading = true;
+    private bool busy;
+    private string? actionError;
+    private string? actionSuccess;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null || Session.User.Role != UserRoles.Company)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        try
+        {
+            companies = await Http.GetFromJsonAsync<List<CompanyMembershipResponse>>("api/companies");
+            if (companies is { Count: > 0 })
+            {
+                var target = CompanyId.HasValue
+                    ? companies.FirstOrDefault(c => c.Company.Id == CompanyId.Value) ?? companies[0]
+                    : companies[0];
+
+                await SelectCompanyAsync(target);
+            }
+        }
+        catch (HttpRequestException)
+        {
+            actionError = "Nepodařilo se načíst údaje o firmách.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task OnCompanyChanged(ChangeEventArgs e)
+    {
+        if (Guid.TryParse(e.Value?.ToString(), out var id) && companies is not null)
+        {
+            var target = companies.FirstOrDefault(c => c.Company.Id == id);
+            if (target is not null)
+            {
+                await SelectCompanyAsync(target);
+            }
+        }
+    }
+
+    private async Task SelectCompanyAsync(CompanyMembershipResponse membership)
+    {
+        selectedCompanyId = membership.Company.Id;
+        currentCompanyName = membership.Company.Name;
+        canManageTeam = membership.Membership.Role is CompanyMemberRoles.Owner or CompanyMemberRoles.Admin;
+        actionError = null;
+        actionSuccess = null;
+
+        await LoadMembersAsync();
+    }
+
+    private async Task LoadMembersAsync()
+    {
+        members = await Http.GetFromJsonAsync<List<CompanyMemberResponse>>($"api/companies/{selectedCompanyId}/members");
+    }
+
+    private async Task AddMemberAsync()
+    {
+        busy = true;
+        actionError = null;
+        actionSuccess = null;
+
+        try
+        {
+            using var response = await Http.PostAsJsonAsync($"api/companies/{selectedCompanyId}/members", inviteModel);
+            if (response.IsSuccessStatusCode)
+            {
+                actionSuccess = "Člen byl úspěšně přidán do týmu.";
+                inviteModel = new AddCompanyMemberRequest();
+                await LoadMembersAsync();
+            }
+            else
+            {
+                actionError = response.StatusCode switch
+                {
+                    HttpStatusCode.NotFound => "Aktivní firemní účet s tímto e-mailem nebyl nalezen.",
+                    HttpStatusCode.Conflict => "Uživatel je již členem této firmy.",
+                    HttpStatusCode.Forbidden => "Nemáte oprávnění spravovat tým.",
+                    _ => "Přidání člena se nezdařilo."
+                };
+            }
+        }
+        catch (HttpRequestException)
+        {
+            actionError = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task ChangeRoleAsync(Guid memberId, string? newRole)
+    {
+        if (string.IsNullOrWhiteSpace(newRole)) return;
+
+        busy = true;
+        actionError = null;
+        actionSuccess = null;
+
+        try
+        {
+            var request = new UpdateCompanyMemberRequest { Role = newRole };
+            using var response = await Http.PatchAsJsonAsync($"api/companies/{selectedCompanyId}/members/{memberId}", request);
+
+            if (response.IsSuccessStatusCode)
+            {
+                actionSuccess = "Role člena byla upravena.";
+                await LoadMembersAsync();
+            }
+            else
+            {
+                actionError = "Změna role se nezdařila.";
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task RemoveMemberAsync(Guid memberId)
+    {
+        busy = true;
+        actionError = null;
+        actionSuccess = null;
+
+        try
+        {
+            using var response = await Http.DeleteAsync($"api/companies/{selectedCompanyId}/members/{memberId}");
+            if (response.IsSuccessStatusCode)
+            {
+                actionSuccess = "Člen byl odebrán z týmu.";
+                await LoadMembersAsync();
+            }
+            else
+            {
+                actionError = "Odebrání člena se nezdařilo.";
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}

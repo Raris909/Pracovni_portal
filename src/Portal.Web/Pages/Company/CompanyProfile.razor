@@ -1,0 +1,182 @@
+@page "/company/profile"
+@using System.Net
+@using Portal.Contracts.Auth
+@using Portal.Contracts.Companies
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Moje firmy</PageTitle>
+
+<h1>Firemní profily</h1>
+
+@if (loading)
+{
+    <p>Načítání firem…</p>
+}
+else
+{
+    @if (error is not null)
+    {
+        <p role="alert" style="color: red;">@error</p>
+    }
+
+    <section>
+        <h2>Přiřazené firmy</h2>
+        @if (companies is null || companies.Count == 0)
+        {
+            <p>Zatím nejste členem žádné firmy. Můžete založit novou níže.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Název firmy</th>
+                        <th>IČO</th>
+                        <th>Země</th>
+                        <th>Vaše role</th>
+                        <th>Rychlé akce</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in companies)
+                    {
+                        <tr>
+                            <td><strong>@item.Company.Name</strong></td>
+                            <td>@(item.Company.RegistrationNumber ?? "—")</td>
+                            <td>@item.Company.CountryCode</td>
+                            <td>@item.Membership.Role</td>
+                            <td class="actions">
+                                <a class="btn-secondary" href="@($"company/{item.Company.Id}/jobs")">Pozice</a> |
+                                <a class="btn-secondary" href="@($"company/{item.Company.Id}/team")">HR Tým</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
+
+    <hr />
+
+    <section>
+        <h2>Založit novou firmu</h2>
+        @if (successMessage is not null)
+        {
+            <p role="status" style="color: green;">@successMessage</p>
+        }
+
+        <EditForm Model="model" OnValidSubmit="CreateAsync">
+            <DataAnnotationsValidator />
+
+            <div>
+                <label for="name">Název firmy</label>
+                <InputText id="name" @bind-Value="model.Name" />
+            </div>
+
+            <div>
+                <label for="reg-num">IČO / Registrační číslo</label>
+                <InputText id="reg-num" @bind-Value="model.RegistrationNumber" />
+            </div>
+
+            <div>
+                <label for="country">Kód země (2 velká písmena, např. CZ)</label>
+                <InputText id="country" @bind-Value="model.CountryCode" placeholder="CZ" />
+            </div>
+
+            <div>
+                <label for="website">Webové stránky</label>
+                <InputText id="website" type="url" @bind-Value="model.WebsiteUrl" placeholder="https://example.com" />
+            </div>
+
+            <div>
+                <label for="address">Adresa</label>
+                <InputText id="address" @bind-Value="model.Address" />
+            </div>
+
+            <div>
+                <label for="description">Popis firmy</label>
+                <InputTextArea id="description" @bind-Value="model.Description" rows="4" />
+            </div>
+
+            <button type="submit" disabled="@saving">
+                @(saving ? "Zakládám…" : "Založit firmu")
+            </button>
+
+            <ValidationSummary />
+        </EditForm>
+    </section>
+}
+
+@code {
+    private List<CompanyMembershipResponse>? companies;
+    private CreateCompanyRequest model = new() { CountryCode = "CZ" };
+    private bool loading = true;
+    private bool saving;
+    private string? error;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null || Session.User.Role != UserRoles.Company)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        await LoadCompaniesAsync();
+    }
+
+    private async Task LoadCompaniesAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            companies = await Http.GetFromJsonAsync<List<CompanyMembershipResponse>>("api/companies");
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nepodařilo se načíst seznam firem.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task CreateAsync()
+    {
+        saving = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.PostAsJsonAsync("api/companies", model);
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Firma byla úspěšně založena.";
+                model = new CreateCompanyRequest { CountryCode = "CZ" };
+                await LoadCompaniesAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Firma s tímto registračním číslem již v dané zemi existuje.";
+            }
+            else
+            {
+                error = "Založení firmy se nezdařilo. Zkontrolujte vyplněné údaje.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

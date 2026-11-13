@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using Portal.Contracts.Auth
 @inject Portal.Web.Services.AuthSession Session
 @inject NavigationManager Navigation
 
@@ -8,6 +9,13 @@
         <NavLink href="" Match="NavLinkMatch.All">Pracovní portál</NavLink>
         @if (Session.User is { } user)
         {
+            @if (user.Role == UserRoles.Company)
+            {
+                <NavLink href="company/jobs">Správa pozic</NavLink>
+                <NavLink href="company/team">HR Tým</NavLink>
+                <NavLink href="company/profile">Profil firmy</NavLink>
+            }
+
             <NavLink href="account">Můj účet</NavLink>
             <span>@user.FirstName @user.LastName</span>
             <button type="button" @onclick="Logout">Odhlásit se</button>
@@ -23,7 +31,7 @@
 
 @code {
     protected override void OnInitialized() => Session.Changed += OnSessionChanged;
-    private void OnSessionChanged() => StateHasChanged();
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
     private void Logout()
     {
         Session.Logout();
