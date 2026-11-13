@@ -1,0 +1,161 @@
+@page "/jobs/{JobId:guid}"
+@using System.Net
+@using Portal.Contracts.Jobs
+@inject HttpClient Http
+
+<PageTitle>@(job?.Title ?? "Detail pozice")</PageTitle>
+
+<p><a class="btn-secondary" href="">← Zpět na nabídky</a></p>
+
+@if (loading)
+{
+    <p>Načítání detailu pozice…</p>
+}
+else if (notFound)
+{
+    <p role="alert">Pracovní nabídka nebyla nalezena nebo již není aktivní.</p>
+}
+else if (error is not null)
+{
+    <p role="alert">@error</p>
+}
+else if (job is not null)
+{
+    <article>
+        <h1>@job.Title</h1>
+        <p><strong>@job.Company.Name</strong> · @GetWorkModeLabel(job.WorkMode) ·
+            @GetEmploymentTypeLabel(job.EmploymentType)</p>
+
+            <ul>
+                @if (!string.IsNullOrWhiteSpace(job.Location))
+                {
+                    <li><strong>Lokalita:</strong> @job.Location</li>
+                }
+                @if (FormatSalary(job) is { } salary)
+                {
+                    <li><strong>Mzda:</strong> @salary</li>
+                }
+                <li><strong>Zveřejněno:</strong> @job.PublishedAt.ToLocalTime().ToString("d. M. yyyy")</li>
+                @if (job.ApplicationDeadline.HasValue)
+                {
+                    <li><strong>Uzávěrka přihlášek:</strong> @job.ApplicationDeadline.Value.ToLocalTime().ToString("d. M. yyyy")
+                    </li>
+                }
+            </ul>
+        </article>
+
+        <article>
+            <h2>Popis pozice</h2>
+            <p style="white-space: pre-line;">@job.Description</p>
+
+            @if (!string.IsNullOrWhiteSpace(job.Requirements))
+            {
+                <h2>Požadavky</h2>
+                <p style="white-space: pre-line;">@job.Requirements</p>
+            }
+        </article>
+
+        <article>
+            <h2>O společnosti @job.Company.Name</h2>
+            @if (!string.IsNullOrWhiteSpace(job.Company.Description))
+            {
+                <p style="white-space: pre-line;">@job.Company.Description</p>
+            }
+            <ul>
+                <li><strong>Země:</strong> @job.Company.CountryCode</li>
+                @if (!string.IsNullOrWhiteSpace(job.Company.RegistrationNumber))
+                {
+                    <li><strong>IČO / Reg. číslo:</strong> @job.Company.RegistrationNumber</li>
+                }
+                @if (!string.IsNullOrWhiteSpace(job.Company.Address))
+                {
+                    <li><strong>Adresa:</strong> @job.Company.Address</li>
+                }
+                @if (!string.IsNullOrWhiteSpace(job.Company.WebsiteUrl))
+                {
+                    <li><strong>Web:</strong> <a href="@job.Company.WebsiteUrl" target="_blank"
+                                                     rel="noopener noreferrer">@job.Company.WebsiteUrl</a></li>
+                    }
+                </ul>
+            </article>
+        }
+
+@code {
+    [Parameter] public Guid JobId { get; set; }
+
+    private JobOfferDetailResponse? job;
+    private bool loading = true;
+    private bool notFound;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        notFound = false;
+        error = null;
+
+        try
+        {
+            using var response = await Http.GetAsync($"api/jobs/{JobId}");
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                notFound = true;
+            }
+            else
+            {
+                response.EnsureSuccessStatusCode();
+                job = await response.Content.ReadFromJsonAsync<JobOfferDetailResponse>();
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Detail pozice se nepodařilo načíst.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private static string? FormatSalary(JobOfferDetailResponse item)
+    {
+        if (!item.SalaryMin.HasValue && !item.SalaryMax.HasValue)
+            return null;
+
+        var period = item.SalaryPeriod switch
+        {
+            SalaryPeriods.Hour => "/ hod.",
+            SalaryPeriods.Month => "/ měs.",
+            SalaryPeriods.Year => "/ rok",
+            _ => item.SalaryPeriod ?? ""
+        };
+
+        var range = (item.SalaryMin, item.SalaryMax) switch
+        {
+            ({ } min, { } max) when min == max => $"{min:N0}",
+            ({ } min, { } max) => $"{min:N0} – {max:N0}",
+            ({ } min, null) => $"od {min:N0}",
+            (null, { } max) => $"do {max:N0}",
+            _ => ""
+        };
+
+        return $"{range} {item.SalaryCurrency} {period}".Trim();
+    }
+
+    private static string GetWorkModeLabel(string mode) => mode switch
+    {
+        WorkModes.Onsite => "Na pracovišti",
+        WorkModes.Hybrid => "Hybridní",
+        WorkModes.Remote => "Remote",
+        _ => mode
+    };
+
+    private static string GetEmploymentTypeLabel(string type) => type switch
+    {
+        EmploymentTypes.FullTime => "Plný úvazek",
+        EmploymentTypes.PartTime => "Zkrácený úvazek",
+        EmploymentTypes.Contract => "Kontrakt / IČO",
+        EmploymentTypes.Internship => "Stáž",
+        _ => type
+    };
+}
