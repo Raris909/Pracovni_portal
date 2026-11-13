@@ -15,15 +15,25 @@ else if (jobs is null)
 else if (jobs.Count == 0)
 {
     <p>Zatím nejsou zveřejněné žádné pracovní nabídky.</p>
-    @if (offset > 0) { <button @onclick="PreviousAsync">Předchozí</button> }
+    @if (offset > 0)
+    {
+        <button @onclick="PreviousAsync">Předchozí</button>
+    }
 }
 else
 {
     @foreach (var job in jobs)
     {
         <article>
-            <h2>@job.Title</h2>
-            <p>@job.CompanyName · @job.Location</p>
+            <h2><a href="@($"jobs/{job.Id}")">@job.Title</a></h2>
+            <p>
+                <strong>@job.CompanyName</strong>
+                @if (!string.IsNullOrWhiteSpace(job.Location))
+                {
+                    <span> · @job.Location</span>
+                }
+                <span> · @GetWorkModeLabel(job.WorkMode)</span>
+            </p>
         </article>
     }
     <div class="actions">
@@ -44,6 +54,7 @@ else
     private async Task LoadAsync()
     {
         loading = true;
+        error = null;
         try
         {
             jobs = await Http.GetFromJsonAsync<List<JobOfferResponse>>($"api/jobs?offset={offset}&limit={PageSize}");
@@ -57,7 +68,7 @@ else
 
     private async Task PreviousAsync()
     {
-        offset -= PageSize;
+        offset = Math.Max(0, offset - PageSize);
         await LoadAsync();
     }
 
@@ -66,4 +77,12 @@ else
         offset += PageSize;
         await LoadAsync();
     }
+
+    private static string GetWorkModeLabel(string mode) => mode switch
+    {
+        WorkModes.Onsite => "Na pracovišti",
+        WorkModes.Hybrid => "Hybridní",
+        WorkModes.Remote => "Remote",
+        _ => mode
+    };
 }
