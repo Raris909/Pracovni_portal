@@ -1,99 +1,128 @@
 @page "/company/jobs"
+@page "/company/{CompanyId:guid}/jobs"
+@using System.Net
+@using Portal.Contracts.Auth
+@using Portal.Contracts.Companies
 @using Portal.Contracts.Jobs
 @inject Portal.Web.Services.AuthSession Session
 @inject HttpClient Http
 @inject NavigationManager Navigation
 
-<PageTitle>Správa nabídky práce</PageTitle>
+<PageTitle>Správa pozic</PageTitle>
 
-<div>
-    <h1>Správa pracovních pozic</h1>
-    <a href="company/jobs/new">Vytvořit novou pozici</a>
-</div>
+<h1>Správa pracovních pozic</h1>
 
 @if (loading)
 {
-    <p>Načítání pozic…</p>
+    <p>Načítání…</p>
 }
-else if (error is not null)
+else if (companies is null || companies.Count == 0)
 {
-    <p role="alert" style="color: red;">@error</p>
-}
-else if (jobs is null || jobs.Count == 0)
-{
-    <p>Zatím jste nevytvořili žádné pracovní nabídky.</p>
+    <p>Nejste členem žádné firmy. Nejprve si <a href="company/profile">založte firmu</a>.</p>
 }
 else
 {
-    <table>
-        <thead>
-            <tr>
-                <th>Název pozice</th>
-                <th>Režim práce</th>
-                <th>Typ úvazku</th>
-                <th>Stav</th>
-                <th>Vytvořeno</th>
-                <th>Akce</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var job in jobs)
-            {
+    @if (companies.Count > 1)
+    {
+        <div>
+            <label for="company-select">Vyberte firmu:</label>
+            <select id="company-select" value="@selectedCompanyId" @onchange="OnCompanyChanged">
+                @foreach (var item in companies)
+                {
+                    <option value="@item.Company.Id">@item.Company.Name</option>
+                }
+            </select>
+        </div>
+        <hr />
+    }
+
+    <div>
+        <p><a href="@($"company/{selectedCompanyId}/jobs/new")">+ Vytvořit novou pozici</a></p>
+    </div>
+
+    @if (error is not null)
+    {
+        <p role="alert" style="color: red;">@error</p>
+    }
+
+    @if (jobs is null || jobs.Count == 0)
+    {
+        <p>Tato firma zatím nemá žádné pracovní nabídky.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
                 <tr>
-                    <td><strong>@job.Title</strong></td>
-                    <td>@GetWorkModeLabel(job.WorkMode)</td>
-                    <td>@GetEmploymentTypeLabel(job.EmploymentType)</td>
-                    <td>@GetStatusLabel(job.Status)</td>
-                    <td>@job.CreatedAt.ToString("d.M.yyyy")</td>
-                    <td>
-                        <a href="@($"company/jobs/edit/{job.Id}")">Upravit</a>
-
-                        @if (job.Status == JobOfferStatuses.Draft)
-                        {
-                            <button type="button" @onclick="() => PublishAsync(job.Id)">Publikovat</button>
-                        }
-                        else if (job.Status == JobOfferStatuses.Published)
-                        {
-                            <button type="button" @onclick="() => CloseAsync(job.Id)">Uzavřít</button>
-                        }
-
-                        @if (job.Status != JobOfferStatuses.Archived)
-                        {
-                            <button type="button" @onclick="() => ArchiveAsync(job.Id)">Archivovat</button>
-                        }
-                    </td>
+                    <th>Název pozice</th>
+                    <th>Režim</th>
+                    <th>Úvazek</th>
+                    <th>Stav</th>
+                    <th>Vytvořeno</th>
+                    <th>Akce</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var job in jobs)
+                {
+                    <tr>
+                        <td><strong>@job.Title</strong></td>
+                        <td>@GetWorkModeLabel(job.WorkMode)</td>
+                        <td>@GetEmploymentTypeLabel(job.EmploymentType)</td>
+                        <td>@GetStatusLabel(job.Status)</td>
+                        <td>@job.CreatedAt.ToString("d.M.yyyy")</td>
+                        <td class="actions">
+                            @if (job.Status == JobOfferStatuses.Draft)
+                            {
+                                <a class="btn-secondary" href="@($"company/{selectedCompanyId}/jobs/edit/{job.Id}")">Upravit</a>
+                                <button type="button" disabled="@busy" @onclick="() => PublishAsync(job.Id)">Publikovat</button>
+                            }
+                            else if (job.Status == JobOfferStatuses.Published)
+                            {
+                                <button type="button" disabled="@busy" @onclick="() => CloseAsync(job.Id)">Uzavřít</button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 }
 
 @code {
+    [Parameter] public Guid? CompanyId { get; set; }
+
+    private List<CompanyMembershipResponse>? companies;
     private List<JobOfferManagementResponse>? jobs;
+    private Guid selectedCompanyId;
     private bool loading = true;
+    private bool busy;
     private string? error;
 
     protected override async Task OnInitializedAsync()
     {
-        if (Session.User is null)
+        if (Session.User is null || Session.User.Role != UserRoles.Company)
         {
             Navigation.NavigateTo("login");
             return;
         }
 
-        await LoadJobsAsync();
-    }
-
-    private async Task LoadJobsAsync()
-    {
-        loading = true;
         try
         {
-            jobs = await Http.GetFromJsonAsync<List<JobOfferManagementResponse>>("api/companies/me/jobs");
+            companies = await Http.GetFromJsonAsync<List<CompanyMembershipResponse>>("api/companies");
+            if (companies is { Count: > 0 })
+            {
+                var target = CompanyId.HasValue
+                    ? companies.FirstOrDefault(c => c.Company.Id == CompanyId.Value) ?? companies[0]
+                    : companies[0];
+
+                selectedCompanyId = target.Company.Id;
+                await LoadJobsAsync();
+            }
         }
         catch (HttpRequestException)
         {
-            error = "Nepodařilo se načíst seznam pracovních nabídek.";
+            error = "Nepodařilo se načíst firmy.";
         }
         finally
         {
@@ -101,29 +130,82 @@ else
         }
     }
 
-    private async Task PublishAsync(Guid id)
+    private async Task OnCompanyChanged(ChangeEventArgs e)
     {
-        var response = await Http.PostAsync($"api/companies/me/jobs/{id}/publish", null);
-        if (response.IsSuccessStatusCode) await LoadJobsAsync();
+        if (Guid.TryParse(e.Value?.ToString(), out var id))
+        {
+            selectedCompanyId = id;
+            await LoadJobsAsync();
+        }
     }
 
-    private async Task CloseAsync(Guid id)
+    private async Task LoadJobsAsync()
     {
-        var response = await Http.PostAsync($"api/companies/me/jobs/{id}/close", null);
-        if (response.IsSuccessStatusCode) await LoadJobsAsync();
+        error = null;
+        try
+        {
+            jobs = await
+Http.GetFromJsonAsync<List<JobOfferManagementResponse>>($"api/companies/{selectedCompanyId}/jobs?offset=0&limit=100");
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nepodařilo se načíst pracovní nabídky.";
+        }
     }
 
-    private async Task ArchiveAsync(Guid id)
+    private async Task PublishAsync(Guid jobId)
     {
-        var response = await Http.PostAsync($"api/companies/me/jobs/{id}/archive", null);
-        if (response.IsSuccessStatusCode) await LoadJobsAsync();
+        busy = true;
+        error = null;
+        try
+        {
+            using var response = await Http.PostAsync($"api/companies/{selectedCompanyId}/jobs/{jobId}/publish", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadJobsAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Nabídku nelze publikovat (zkontrolujte, zda neuplynul termín uzávěrky).";
+            }
+            else
+            {
+                error = "Publikování nabídky se nezdařilo.";
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CloseAsync(Guid jobId)
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            using var response = await Http.PostAsync($"api/companies/{selectedCompanyId}/jobs/{jobId}/close", null);
+            if (response.IsSuccessStatusCode)
+            {
+                await LoadJobsAsync();
+            }
+            else
+            {
+                error = "Uzavření nabídky se nezdařilo.";
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
     }
 
     private static string GetWorkModeLabel(string mode) => mode switch
     {
         WorkModes.Onsite => "Na pracovišti",
-        WorkModes.Hybrid => "Hrabridní",
-        WorkModes.Remote => "Vzdálená práce",
+        WorkModes.Hybrid => "Hybridní",
+        WorkModes.Remote => "Remote",
         _ => mode
     };
 

@@ -1,11 +1,13 @@
-@page "/company/jobs/new"
-@page "/company/jobs/edit/{Id:guid}"
+@page "/company/{CompanyId:guid}/jobs/new"
+@page "/company/{CompanyId:guid}/jobs/edit/{JobId:guid}"
+@using System.Net
+@using Portal.Contracts.Auth
 @using Portal.Contracts.Jobs
 @inject Portal.Web.Services.AuthSession Session
 @inject HttpClient Http
 @inject NavigationManager Navigation
 
-<PageTitle>@(IsEdit ? "Úprava inzerátu" : "Nová pracovní pozice")</PageTitle>
+<PageTitle>@(IsEdit ? "Úprava pozice" : "Nová pracovní pozice")</PageTitle>
 
 <h1>@(IsEdit ? "Úprava pracovní pozice" : "Vytvoření nové pracovní pozice")</h1>
 
@@ -22,25 +24,24 @@ else
 
     <EditForm Model="model" OnValidSubmit="SaveAsync">
         <DataAnnotationsValidator />
-        <ValidationSummary />
 
         <div>
-            <label for="title">Název pozice *</label>
+            <label for="title">Název pozice</label>
             <InputText id="title" @bind-Value="model.Title" />
         </div>
 
         <div>
-            <label for="work-mode">Režim práce *</label>
+            <label for="work-mode">Režim práce</label>
             <InputSelect id="work-mode" @bind-Value="model.WorkMode">
                 <option value="">-- Vyberte režim --</option>
                 <option value="@WorkModes.Onsite">Na pracovišti (Onsite)</option>
                 <option value="@WorkModes.Hybrid">Hybridní</option>
-                <option value="@WorkModes.Remote">Vzdálená práce (Remote)</option>
+                <option value="@WorkModes.Remote">Remote</option>
             </InputSelect>
         </div>
 
         <div>
-            <label for="employment-type">Typ úvazku *</label>
+            <label for="employment-type">Typ úvazku</label>
             <InputSelect id="employment-type" @bind-Value="model.EmploymentType">
                 <option value="">-- Vyberte úvazek --</option>
                 <option value="@EmploymentTypes.FullTime">Plný úvazek</option>
@@ -56,7 +57,7 @@ else
         </div>
 
         <fieldset>
-            <legend>Ohodnocení / Mzda</legend>
+            <legend>Ohodnocení / Mzda (nepovinné)</legend>
             <div>
                 <label for="salary-min">Minimální mzda</label>
                 <InputNumber id="salary-min" @bind-Value="model.SalaryMin" />
@@ -68,14 +69,14 @@ else
             </div>
 
             <div>
-                <label for="salary-currency">Měna</label>
-                <InputText id="salary-currency" @bind-Value="model.SalaryCurrency" placeholder="CZK" />
+                <label for="salary-currency">Měna (3 velká písmena, např. CZK, EUR)</label>
+                <InputText id="salary-currency" @bind-Value="salaryCurrencyInput" placeholder="CZK" />
             </div>
 
             <div>
                 <label for="salary-period">Perioda</label>
-                <InputSelect id="salary-period" @bind-Value="model.SalaryPeriod">
-                    <option value="">-- Vyberte periodu --</option>
+                <InputSelect id="salary-period" @bind-Value="salaryPeriodInput">
+                    <option value="">-- Bez periody --</option>
                     <option value="@SalaryPeriods.Month">Měsíčně</option>
                     <option value="@SalaryPeriods.Hour">Hodinově</option>
                     <option value="@SalaryPeriods.Year">Ročně</option>
@@ -89,34 +90,49 @@ else
         </div>
 
         <div>
-            <label for="description">Detailní popis pozice *</label>
+            <label for="description">Detailní popis pozice</label>
             <InputTextArea id="description" @bind-Value="model.Description" rows="6" />
         </div>
 
         <div>
-            <label for="requirements">Požadavky na uchazeče *</label>
+            <label for="requirements">Požadavky na uchazeče</label>
             <InputTextArea id="requirements" @bind-Value="model.Requirements" rows="6" />
         </div>
 
-        <div>
+        <div class="actions">
             <button type="submit" disabled="@saving">
-                @(saving ? "Ukládám…" : "Uložit pozici")
+                @(saving ? "Ukládám…" : "Uložit koncept")
             </button>
-            <a href="company/jobs">Zrušit</a>
+            <a class="btn-secondary" href="@($"company/{CompanyId}/jobs")">Zrušit</a>
         </div>
+
+        <ValidationSummary />
     </EditForm>
 }
 
 @code {
-    [Parameter] public Guid? Id { get; set; }
+    [Parameter] public Guid CompanyId { get; set; }
+    [Parameter] public Guid? JobId { get; set; }
 
     private JobOfferRequest model = new();
-    private bool IsEdit => Id.HasValue;
-    private bool loading = false;
-    private bool saving = false;
+    private bool IsEdit => JobId.HasValue;
+    private bool loading;
+    private bool saving;
     private string? error;
 
-    // Pomocná vlastnost pro převod DateTimeOffset? na DateTime? pro <InputDate>
+    // Převede prázdný string na null, aby prošla validace JobOfferRequest.Validate()
+    private string? salaryCurrencyInput
+    {
+        get => model.SalaryCurrency;
+        set => model.SalaryCurrency = string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+    }
+
+    private string? salaryPeriodInput
+    {
+        get => model.SalaryPeriod;
+        set => model.SalaryPeriod = string.IsNullOrWhiteSpace(value) ? null : value;
+    }
+
     private DateTime? deadlineLocalDate
     {
         get => model.ApplicationDeadline?.LocalDateTime;
@@ -125,7 +141,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Session.User is null)
+        if (Session.User is null || Session.User.Role != UserRoles.Company)
         {
             Navigation.NavigateTo("login");
             return;
@@ -136,9 +152,15 @@ else
             loading = true;
             try
             {
-                var response = await Http.GetFromJsonAsync<JobOfferManagementResponse>($"api/companies/me/jobs/{Id}");
+                var response = await Http.GetFromJsonAsync<JobOfferManagementResponse>($"api/companies/{CompanyId}/jobs/{JobId}");
                 if (response is not null)
                 {
+                    if (response.Status != JobOfferStatuses.Draft)
+                    {
+                        error = "Upravovat lze pouze nabídky ve stavu koncept (draft).";
+                        return;
+                    }
+
                     model = new JobOfferRequest
                     {
                         Title = response.Title,
@@ -173,23 +195,21 @@ else
 
         try
         {
-            HttpResponseMessage response;
-            if (IsEdit)
-            {
-                response = await Http.PutAsJsonAsync($"api/companies/me/jobs/{Id}", model);
-            }
-            else
-            {
-                response = await Http.PostAsJsonAsync("api/companies/me/jobs", model);
-            }
+            using var response = IsEdit
+                ? await Http.PutAsJsonAsync($"api/companies/{CompanyId}/jobs/{JobId}", model)
+                : await Http.PostAsJsonAsync($"api/companies/{CompanyId}/jobs", model);
 
             if (response.IsSuccessStatusCode)
             {
-                Navigation.NavigateTo("company/jobs");
+                Navigation.NavigateTo($"company/{CompanyId}/jobs");
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Upravovat lze pouze koncept nabídky.";
             }
             else
             {
-                error = "Uložení pozice selhalo. Ujistěte se, že jsou všechna povinná pole správně vyplněna.";
+                error = "Uložení pozice selhalo. Zkontrolujte všechna povinná pole a nastavení mzdy.";
             }
         }
         catch (HttpRequestException)

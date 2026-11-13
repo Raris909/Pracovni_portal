@@ -1,71 +1,117 @@
 @page "/company/profile"
+@using System.Net
+@using Portal.Contracts.Auth
 @using Portal.Contracts.Companies
 @inject Portal.Web.Services.AuthSession Session
 @inject HttpClient Http
 @inject NavigationManager Navigation
 
-<PageTitle>Profil firmy</PageTitle>
+<PageTitle>Moje firmy</PageTitle>
 
-<h1>Profil firmy</h1>
+<h1>Firemní profily</h1>
 
 @if (loading)
 {
-    <p>Načítání profilu…</p>
-}
-else if (error is not null)
-{
-    <p role="alert" style="color: red;">@error</p>
+    <p>Načítání firem…</p>
 }
 else
 {
-    @if (successMessage is not null)
+    @if (error is not null)
     {
-        <p role="status" style="color: green;">@successMessage</p>
+        <p role="alert" style="color: red;">@error</p>
     }
 
-    <EditForm Model="model" OnValidSubmit="SaveAsync">
-        <DataAnnotationsValidator />
-        <ValidationSummary />
+    <section>
+        <h2>Přiřazené firmy</h2>
+        @if (companies is null || companies.Count == 0)
+        {
+            <p>Zatím nejste členem žádné firmy. Můžete založit novou níže.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Název firmy</th>
+                        <th>IČO</th>
+                        <th>Země</th>
+                        <th>Vaše role</th>
+                        <th>Rychlé akce</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in companies)
+                    {
+                        <tr>
+                            <td><strong>@item.Company.Name</strong></td>
+                            <td>@(item.Company.RegistrationNumber ?? "—")</td>
+                            <td>@item.Company.CountryCode</td>
+                            <td>@item.Membership.Role</td>
+                            <td class="actions">
+                                <a class="btn-secondary" href="@($"company/{item.Company.Id}/jobs")">Pozice</a> |
+                                <a class="btn-secondary" href="@($"company/{item.Company.Id}/team")">HR Tým</a>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </section>
 
-        <div>
-            <label for="name">Název firmy *</label>
-            <InputText id="name" @bind-Value="model.Name" />
-        </div>
+    <hr />
 
-        <div>
-            <label for="reg-num">IČO / Reg. číslo</label>
-            <InputText id="reg-num" @bind-Value="model.RegistrationNumber" />
-        </div>
+    <section>
+        <h2>Založit novou firmu</h2>
+        @if (successMessage is not null)
+        {
+            <p role="status" style="color: green;">@successMessage</p>
+        }
 
-        <div>
-            <label for="country">Kód země (např. CZ, SK) *</label>
-            <InputText id="country" @bind-Value="model.CountryCode" placeholder="CZ" />
-        </div>
+        <EditForm Model="model" OnValidSubmit="CreateAsync">
+            <DataAnnotationsValidator />
 
-        <div>
-            <label for="website">Webové stránky</label>
-            <InputText id="website" type="url" @bind-Value="model.WebsiteUrl" placeholder="https://example.com" />
-        </div>
+            <div>
+                <label for="name">Název firmy</label>
+                <InputText id="name" @bind-Value="model.Name" />
+            </div>
 
-        <div>
-            <label for="address">Adresa</label>
-            <InputText id="address" @bind-Value="model.Address" />
-        </div>
+            <div>
+                <label for="reg-num">IČO / Registrační číslo</label>
+                <InputText id="reg-num" @bind-Value="model.RegistrationNumber" />
+            </div>
 
-        <div>
-            <label for="description">Popis firmy</label>
-            <InputTextArea id="description" @bind-Value="model.Description" rows="5" cols="45" />
-        </div>
+            <div>
+                <label for="country">Kód země (2 velká písmena, např. CZ)</label>
+                <InputText id="country" @bind-Value="model.CountryCode" placeholder="CZ" />
+            </div>
 
-        <button type="submit" disabled="@saving">
-            @(saving ? "Ukládám…" : (hasCompany ? "Uložit změny" : "Vytvořit firmu"))
-        </button>
-    </EditForm>
+            <div>
+                <label for="website">Webové stránky</label>
+                <InputText id="website" type="url" @bind-Value="model.WebsiteUrl" placeholder="https://example.com" />
+            </div>
+
+            <div>
+                <label for="address">Adresa</label>
+                <InputText id="address" @bind-Value="model.Address" />
+            </div>
+
+            <div>
+                <label for="description">Popis firmy</label>
+                <InputTextArea id="description" @bind-Value="model.Description" rows="4" />
+            </div>
+
+            <button type="submit" disabled="@saving">
+                @(saving ? "Zakládám…" : "Založit firmu")
+            </button>
+
+            <ValidationSummary />
+        </EditForm>
+    </section>
 }
 
 @code {
-    private CreateCompanyRequest model = new();
-    private bool hasCompany;
+    private List<CompanyMembershipResponse>? companies;
+    private CreateCompanyRequest model = new() { CountryCode = "CZ" };
     private bool loading = true;
     private bool saving;
     private string? error;
@@ -73,39 +119,26 @@ else
 
     protected override async Task OnInitializedAsync()
     {
-        if (Session.User is null)
+        if (Session.User is null || Session.User.Role != UserRoles.Company)
         {
             Navigation.NavigateTo("login");
             return;
         }
 
+        await LoadCompaniesAsync();
+    }
+
+    private async Task LoadCompaniesAsync()
+    {
+        loading = true;
+        error = null;
         try
         {
-            // Načtení detailu mojeho členství a firmy
-            var membership = await Http.GetFromJsonAsync<CompanyMembershipResponse>("api/companies/me");
-            if (membership is not null)
-            {
-                hasCompany = true;
-                model = new CreateCompanyRequest
-                {
-                    Name = membership.Company.Name,
-                    RegistrationNumber = membership.Company.RegistrationNumber,
-                    CountryCode = membership.Company.CountryCode,
-                    Description = membership.Company.Description,
-                    WebsiteUrl = membership.Company.WebsiteUrl,
-                    Address = membership.Company.Address
-                };
-            }
-        }
-        catch (HttpRequestException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
-        {
-            // Firma zatím neexistuje – uživatel ji může vytvořit
-            hasCompany = false;
-            model.CountryCode = "CZ"; // Výchozí hodnota
+            companies = await Http.GetFromJsonAsync<List<CompanyMembershipResponse>>("api/companies");
         }
         catch (HttpRequestException)
         {
-            error = "Údaje o firmě se nepodařilo načíst.";
+            error = "Nepodařilo se načíst seznam firem.";
         }
         finally
         {
@@ -113,7 +146,7 @@ else
         }
     }
 
-    private async Task SaveAsync()
+    private async Task CreateAsync()
     {
         saving = true;
         error = null;
@@ -121,24 +154,20 @@ else
 
         try
         {
-            HttpResponseMessage response;
-            if (hasCompany)
-            {
-                response = await Http.PutAsJsonAsync("api/companies/me", model);
-            }
-            else
-            {
-                response = await Http.PostAsJsonAsync("api/companies", model);
-            }
-
+            using var response = await Http.PostAsJsonAsync("api/companies", model);
             if (response.IsSuccessStatusCode)
             {
-                hasCompany = true;
-                successMessage = "Údaje o firmě byly úspěšně uloženy.";
+                successMessage = "Firma byla úspěšně založena.";
+                model = new CreateCompanyRequest { CountryCode = "CZ" };
+                await LoadCompaniesAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Firma s tímto registračním číslem již v dané zemi existuje.";
             }
             else
             {
-                error = "Uložení se nepodařilo. Zkontrolujte vyplněná data.";
+                error = "Založení firmy se nezdařilo. Zkontrolujte vyplněné údaje.";
             }
         }
         catch (HttpRequestException)
