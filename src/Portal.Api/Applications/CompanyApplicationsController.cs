@@ -193,10 +193,27 @@ public sealed class CompanyApplicationsController : ControllerBase
 
         var storageRoot = Path.GetFullPath(
             Path.Combine(AppContext.BaseDirectory, "App_Data", "private-documents"));
-        var relativePath = docRecord.StorageKey.Replace('/', Path.DirectorySeparatorChar);
-        var fullPath = Path.GetFullPath(Path.Combine(storageRoot, relativePath));
+        if (!storageRoot.EndsWith(Path.DirectorySeparatorChar))
+        {
+            storageRoot += Path.DirectorySeparatorChar;
+        }
 
-        if (fullPath.StartsWith(storageRoot, StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(fullPath))
+        var relativePath = docRecord.StorageKey
+            .Replace('/', Path.DirectorySeparatorChar)
+            .Replace('\\', Path.DirectorySeparatorChar)
+            .TrimStart(Path.DirectorySeparatorChar);
+
+        var fullPath = Path.GetFullPath(Path.Combine(storageRoot, relativePath));
+        var comparison = OperatingSystem.IsWindows()
+            ? StringComparison.OrdinalIgnoreCase
+            : StringComparison.Ordinal;
+
+        if (!fullPath.StartsWith(storageRoot, comparison))
+        {
+            return BadRequest(new { message = "Invalid document storage path." });
+        }
+
+        if (System.IO.File.Exists(fullPath))
         {
             var stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, useAsync: true);
             return File(stream, docRecord.MimeType, docRecord.OriginalFilename);

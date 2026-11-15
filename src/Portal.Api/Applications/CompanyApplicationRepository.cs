@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Npgsql;
+using NpgsqlTypes;
 using Portal.Contracts.Applications;
 
 namespace Portal.Api.Applications;
@@ -85,10 +86,10 @@ public sealed class CompanyApplicationRepository : ICompanyApplicationRepository
         var list = new List<CompanyApplicationSummaryResponse>();
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = new NpgsqlCommand(sql, connection);
-        cmd.Parameters.AddWithValue("CompanyId", companyId);
-        cmd.Parameters.AddWithValue("JobOfferId", (object?)jobOfferId ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("Status", (object?)status ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("AssignedMemberId", (object?)assignedMemberId ?? DBNull.Value);
+        cmd.Parameters.Add(new NpgsqlParameter("CompanyId", NpgsqlDbType.Uuid) { Value = companyId });
+        cmd.Parameters.Add(new NpgsqlParameter("JobOfferId", NpgsqlDbType.Uuid) { Value = (object?)jobOfferId ?? DBNull.Value });
+        cmd.Parameters.Add(new NpgsqlParameter("Status", NpgsqlDbType.Text) { Value = (object?)status ?? DBNull.Value });
+        cmd.Parameters.Add(new NpgsqlParameter("AssignedMemberId", NpgsqlDbType.Uuid) { Value = (object?)assignedMemberId ?? DBNull.Value });
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
