@@ -1,16 +1,32 @@
+using Portal.Api.Ai;
 using Portal.Contracts.CvReviews;
 
 namespace Portal.Api.CvReviews;
 
+public sealed record ApplicationCvDocumentContext(
+    Guid CandidateId,
+    Guid DocumentId,
+    string StorageKey,
+    string MimeType,
+    JobRequirementsSnapshot JobRequirements);
+
 public interface ICvReviewRepository
 {
-    // Candidate CV self-reviews (portal.candidate_cv_reviews)
     Task<CandidateCvReviewResponse> CreateCandidateReviewAsync(
         Guid candidateId,
         Guid documentId,
         string provider,
         string model,
         string promptVersion,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateCandidateReviewAsync(
+        Guid reviewId,
+        string status,
+        short? score,
+        CandidateCvReviewResultPayload? result,
+        string? errorMessage,
+        AiMetadata? metadata = null,
         CancellationToken cancellationToken = default);
 
     Task<CandidateCvReviewResponse?> GetCandidateReviewByIdAsync(
@@ -22,7 +38,17 @@ public interface ICvReviewRepository
         Guid candidateId,
         CancellationToken cancellationToken = default);
 
-    // Company Application CV reviews (portal.application_cv_reviews)
+    Task<Guid?> GetActiveCompanyMemberIdAsync(
+        Guid companyId,
+        Guid userId,
+        CancellationToken cancellationToken = default);
+
+    Task<ApplicationCvDocumentContext?> GetApplicationCvContextAsync(
+        Guid companyId,
+        Guid applicationId,
+        Guid? documentId,
+        CancellationToken cancellationToken = default);
+
     Task<ApplicationCvReviewResponse> CreateApplicationReviewAsync(
         Guid companyId,
         Guid applicationId,
@@ -33,6 +59,15 @@ public interface ICvReviewRepository
         string model,
         string promptVersion,
         JobRequirementsSnapshot jobRequirementsSnapshot,
+        CancellationToken cancellationToken = default);
+
+    Task UpdateApplicationReviewAsync(
+        Guid reviewId,
+        string status,
+        short? score,
+        ApplicationCvReviewResultPayload? result,
+        string? errorMessage,
+        AiMetadata? metadata = null,
         CancellationToken cancellationToken = default);
 
     Task<ApplicationCvReviewResponse?> GetApplicationReviewByIdAsync(
