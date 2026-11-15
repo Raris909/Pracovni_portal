@@ -262,7 +262,7 @@ public sealed class ApplicationSubmissionService : IApplicationSubmissionService
         {
             const string attachDocsSql = """
                 INSERT INTO portal.application_documents (application_id, document_id, candidate_id)
-                SELECT @ApplicationId, unnest(@DocIds), @CandidateId;
+                SELECT @ApplicationId, unnest(@DocIds::uuid[]), @CandidateId;
                 """;
 
             await using var attachCmd = new NpgsqlCommand(attachDocsSql, connection, transaction);
