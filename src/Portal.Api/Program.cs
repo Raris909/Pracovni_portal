@@ -37,6 +37,8 @@ builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
 
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
+
 builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
 
 builder.Services.Configure<DocumentStorageOptions>(
