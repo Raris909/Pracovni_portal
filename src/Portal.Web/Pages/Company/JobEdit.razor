@@ -15,6 +15,11 @@
 {
     <p>Načítání údajů…</p>
 }
+else if (notFound)
+{
+    <p role="alert">Pracovní nabídka nebyla nalezena.</p>
+    <p><a class="btn-secondary" href="@($"company/{CompanyId}/jobs")">← Zpět na seznam pozic</a></p>
+}
 else
 {
     @if (error is not null)
@@ -118,9 +123,9 @@ else
     private bool IsEdit => JobId.HasValue;
     private bool loading;
     private bool saving;
+    private bool notFound;
     private string? error;
 
-    // Převede prázdný string na null, aby prošla validace JobOfferRequest.Validate()
     private string? salaryCurrencyInput
     {
         get => model.SalaryCurrency;
@@ -139,7 +144,7 @@ else
         set => model.ApplicationDeadline = value.HasValue ? new DateTimeOffset(value.Value) : null;
     }
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
         if (Session.User is null || Session.User.Role != UserRoles.Company)
         {
@@ -147,44 +152,59 @@ else
             return;
         }
 
-        if (IsEdit)
-        {
-            loading = true;
-            try
-            {
-                var response = await Http.GetFromJsonAsync<JobOfferManagementResponse>($"api/companies/{CompanyId}/jobs/{JobId}");
-                if (response is not null)
-                {
-                    if (response.Status != JobOfferStatuses.Draft)
-                    {
-                        error = "Upravovat lze pouze nabídky ve stavu koncept (draft).";
-                        return;
-                    }
+        error = null;
+        notFound = false;
 
-                    model = new JobOfferRequest
-                    {
-                        Title = response.Title,
-                        Description = response.Description,
-                        Requirements = response.Requirements,
-                        Location = response.Location,
-                        WorkMode = response.WorkMode,
-                        EmploymentType = response.EmploymentType,
-                        SalaryMin = response.SalaryMin,
-                        SalaryMax = response.SalaryMax,
-                        SalaryCurrency = response.SalaryCurrency,
-                        SalaryPeriod = response.SalaryPeriod,
-                        ApplicationDeadline = response.ApplicationDeadline
-                    };
+        if (!IsEdit)
+        {
+            model = new JobOfferRequest();
+            loading = false;
+            return;
+        }
+
+        loading = true;
+        try
+        {
+            using var response = await Http.GetAsync($"api/companies/{CompanyId}/jobs/{JobId}");
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                notFound = true;
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            var job = await response.Content.ReadFromJsonAsync<JobOfferManagementResponse>();
+            if (job is not null)
+            {
+                if (job.Status != JobOfferStatuses.Draft)
+                {
+                    error = "Upravovat lze pouze nabídky ve stavu koncept (draft).";
+                    return;
                 }
+
+                model = new JobOfferRequest
+                {
+                    Title = job.Title,
+                    Description = job.Description,
+                    Requirements = job.Requirements,
+                    Location = job.Location,
+                    WorkMode = job.WorkMode,
+                    EmploymentType = job.EmploymentType,
+                    SalaryMin = job.SalaryMin,
+                    SalaryMax = job.SalaryMax,
+                    SalaryCurrency = job.SalaryCurrency,
+                    SalaryPeriod = job.SalaryPeriod,
+                    ApplicationDeadline = job.ApplicationDeadline
+                };
             }
-            catch (HttpRequestException)
-            {
-                error = "Nabídku práce se nepodařilo načíst.";
-            }
-            finally
-            {
-                loading = false;
-            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nabídku práce se nepodařilo načíst.";
+        }
+        finally
+        {
+            loading = false;
         }
     }
 
@@ -192,6 +212,17 @@ else
     {
         saving = true;
         error = null;
+
+        var hasSalary = model.SalaryMin.HasValue || model.SalaryMax.HasValue;
+        if (!hasSalary)
+        {
+            model.SalaryPeriod = null;
+            model.SalaryCurrency = null;
+        }
+        else if (!string.IsNullOrWhiteSpace(model.SalaryCurrency))
+        {
+            model.SalaryCurrency = model.SalaryCurrency.Trim().ToUpperInvariant();
+        }
 
         try
         {
