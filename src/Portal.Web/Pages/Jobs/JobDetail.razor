@@ -1,6 +1,8 @@
 @page "/jobs/{JobId:guid}"
 @using System.Net
+@using System.Text.Json
 @using Portal.Contracts.Jobs
+@using Portal.Web.Services
 @inject HttpClient Http
 
 <PageTitle>@(job?.Title ?? "Detail pozice")</PageTitle>
@@ -23,8 +25,8 @@ else if (job is not null)
 {
     <article>
         <h1>@job.Title</h1>
-        <p><strong>@job.Company.Name</strong> · @GetWorkModeLabel(job.WorkMode) ·
-            @GetEmploymentTypeLabel(job.EmploymentType)</p>
+        <p><strong>@job.Company.Name</strong> · @JobDisplayHelpers.GetWorkModeLabel(job.WorkMode) ·
+            @JobDisplayHelpers.GetEmploymentTypeLabel(job.EmploymentType)</p>
 
             <ul>
                 @if (!string.IsNullOrWhiteSpace(job.Location))
@@ -73,12 +75,21 @@ else if (job is not null)
                 }
                 @if (!string.IsNullOrWhiteSpace(job.Company.WebsiteUrl))
                 {
-                    <li><strong>Web:</strong> <a href="@job.Company.WebsiteUrl" target="_blank"
-                                                     rel="noopener noreferrer">@job.Company.WebsiteUrl</a></li>
-                    }
-                </ul>
-            </article>
-        }
+                    <li>
+                        <strong>Web:</strong>
+                        @if (JobDisplayHelpers.TryGetSafeHttpUrl(job.Company.WebsiteUrl, out var safeUrl))
+                        {
+                            <a href="@safeUrl" target="_blank" rel="noopener noreferrer">@job.Company.WebsiteUrl</a>
+                        }
+                        else
+                        {
+                            <span>@job.Company.WebsiteUrl</span>
+                        }
+                    </li>
+                }
+            </ul>
+        </article>
+    }
 
 @code {
     [Parameter] public Guid JobId { get; set; }
@@ -90,6 +101,7 @@ else if (job is not null)
 
     protected override async Task OnParametersSetAsync()
     {
+        job = null;
         loading = true;
         notFound = false;
         error = null;
@@ -107,7 +119,7 @@ else if (job is not null)
                 job = await response.Content.ReadFromJsonAsync<JobOfferDetailResponse>();
             }
         }
-        catch (HttpRequestException)
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
         {
             error = "Detail pozice se nepodařilo načíst.";
         }
@@ -141,21 +153,4 @@ else if (job is not null)
 
         return $"{range} {item.SalaryCurrency} {period}".Trim();
     }
-
-    private static string GetWorkModeLabel(string mode) => mode switch
-    {
-        WorkModes.Onsite => "Na pracovišti",
-        WorkModes.Hybrid => "Hybridní",
-        WorkModes.Remote => "Remote",
-        _ => mode
-    };
-
-    private static string GetEmploymentTypeLabel(string type) => type switch
-    {
-        EmploymentTypes.FullTime => "Plný úvazek",
-        EmploymentTypes.PartTime => "Zkrácený úvazek",
-        EmploymentTypes.Contract => "Kontrakt / IČO",
-        EmploymentTypes.Internship => "Stáž",
-        _ => type
-    };
 }

@@ -1,9 +1,11 @@
 @page "/"
 @using Portal.Contracts.Jobs
+@using Portal.Web.Services
 @inject HttpClient Http
 
 <PageTitle>Pracovní nabídky</PageTitle>
 <h1>Pracovní nabídky</h1>
+
 @if (error is not null)
 {
     <p role="alert">@error</p>
@@ -14,10 +16,14 @@ else if (jobs is null)
 }
 else if (jobs.Count == 0)
 {
-    <p>Zatím nejsou zveřejněné žádné pracovní nabídky.</p>
     @if (offset > 0)
     {
-        <button @onclick="PreviousAsync">Předchozí</button>
+        <p>Na této stránce nejsou žádné další pracovní nabídky.</p>
+        <button type="button" disabled="@loading" @onclick="PreviousAsync">Předchozí</button>
+    }
+    else
+    {
+        <p>Zatím nejsou zveřejněné žádné pracovní nabídky.</p>
     }
 }
 else
@@ -32,13 +38,13 @@ else
                 {
                     <span> · @job.Location</span>
                 }
-                <span> · @GetWorkModeLabel(job.WorkMode)</span>
+                <span> · @JobDisplayHelpers.GetWorkModeLabel(job.WorkMode)</span>
             </p>
         </article>
     }
     <div class="actions">
-        <button disabled="@(offset == 0 || loading)" @onclick="PreviousAsync">Předchozí</button>
-        <button disabled="@(jobs.Count < PageSize || loading)" @onclick="NextAsync">Další</button>
+        <button type="button" disabled="@(offset == 0 || loading)" @onclick="PreviousAsync">Předchozí</button>
+        <button type="button" disabled="@(jobs.Count < PageSize || loading)" @onclick="NextAsync">Další</button>
     </div>
 }
 
@@ -63,7 +69,10 @@ else
         {
             error = "Nabídky se nepodařilo načíst. Zkuste stránku obnovit.";
         }
-        finally { loading = false; }
+        finally
+        {
+            loading = false;
+        }
     }
 
     private async Task PreviousAsync()
@@ -77,12 +86,4 @@ else
         offset += PageSize;
         await LoadAsync();
     }
-
-    private static string GetWorkModeLabel(string mode) => mode switch
-    {
-        WorkModes.Onsite => "Na pracovišti",
-        WorkModes.Hybrid => "Hybridní",
-        WorkModes.Remote => "Remote",
-        _ => mode
-    };
 }
