@@ -1,5 +1,6 @@
 @inherits LayoutComponentBase
 @implements IDisposable
+@using Portal.Contracts.Auth
 @inject Portal.Web.Services.AuthSession Session
 @inject NavigationManager Navigation
 
@@ -8,6 +9,11 @@
         <NavLink href="" Match="NavLinkMatch.All">Pracovní portál</NavLink>
         @if (Session.User is { } user)
         {
+            @if (Session.User?.Role == UserRoles.Candidate)
+            {
+                <NavLink href="profile">Můj profil</NavLink>
+                <NavLink href="profile/cv">Životopisy</NavLink>
+            }
             <NavLink href="account">Můj účet</NavLink>
             <span>@user.FirstName @user.LastName</span>
             <button type="button" @onclick="Logout">Odhlásit se</button>

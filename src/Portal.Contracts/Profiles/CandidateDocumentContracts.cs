@@ -27,9 +27,11 @@ public sealed record CandidateDocumentResponse(
     bool IsCurrentCv,
     DateTimeOffset CreatedAt);
 
-public sealed record SetCurrentCvRequest(
-    [property: Required] Guid DocumentId) : IValidatableObject
+public sealed class SetCurrentCvRequest : IValidatableObject
 {
+    [Required]
+    public Guid DocumentId { get; set; }
+
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (DocumentId == Guid.Empty)
