@@ -1,0 +1,278 @@
+@page "/profile/cv"
+@using System.Net.Http.Headers
+@using Microsoft.JSInterop
+@using Portal.Contracts.Auth
+@using Portal.Contracts.Profiles
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject IJSRuntime JS
+
+<PageTitle>Správa životopisů</PageTitle>
+
+<p><a class="btn-secondary" href="profile">← Zpět na profil</a></p>
+
+<h1>Životopisy (CV)</h1>
+
+@if (error is not null)
+{
+    <p role="alert">@error</p>
+}
+@if (successMessage is not null)
+{
+    <p role="status" style="color: green;">@successMessage</p>
+}
+
+<section>
+    <h2>Nahrát nový životopis</h2>
+    <p>Povolené formáty: <strong>.pdf</strong>, <strong>.docx</strong> (maximální velikost 10 MB).</p>
+
+    <div style="display: grid; gap: .75rem; max-width: 28rem;">
+        <div>
+            <label for="cv-file">Vyberte soubor</label>
+            <InputFile OnChange="OnFileSelected" accept=".pdf,.docx" id="cv-file" />
+        </div>
+
+        <label style="display: flex; gap: .5rem; align-items: center; font-weight: normal;">
+            <input type="checkbox" @bind="setAsCurrent" style="width: auto;" />
+            Nastavit ihned jako aktuální (hlavní) životopis
+        </label>
+
+        <div>
+            <button type="button" disabled="@(selectedFile is null || uploading)" @onclick="UploadAsync">
+                @(uploading ? "Nahrávám…" : "Nahrát životopis")
+            </button>
+        </div>
+    </div>
+</section>
+
+<hr />
+
+<section>
+    <h2>Nahrané dokumenty</h2>
+
+    @if (loading)
+    {
+        <p>Načítání historie dokumentů…</p>
+    }
+    else if (documents is null || documents.Count == 0)
+    {
+        <p>Zatím jste nenahráli žádný životopis.</p>
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Název souboru</th>
+                    <th>Velikost</th>
+                    <th>Nahráno</th>
+                    <th>Stav</th>
+                    <th>Akce</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var doc in documents)
+                {
+                    <tr>
+                        <td><strong>@doc.OriginalFilename</strong></td>
+                        <td>@FormatSize(doc.SizeBytes)</td>
+                        <td>@doc.CreatedAt.ToLocalTime().ToString("d. M. yyyy HH:mm")</td>
+                        <td>@(doc.IsCurrentCv ? "Aktivní CV" : "Archivní verze")</td>
+                        <td class="actions">
+                            <button type="button" disabled="@busy" @onclick="() => DownloadAsync(doc)">
+                                Stáhnout
+                            </button>
+                            @if (!doc.IsCurrentCv && doc.Kind == CandidateDocumentKinds.Cv)
+                            {
+                                <button type="button" disabled="@busy" @onclick="() => SetCurrentAsync(doc.Id)">
+                                    Nastavit jako aktivní
+                                </button>
+                            }
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private const long MaxFileSizeBytes = 10 * 1024 * 1024;
+
+    private List<CandidateDocumentResponse>? documents;
+    private IBrowserFile? selectedFile;
+    private bool setAsCurrent = true;
+    private bool loading = true;
+    private bool uploading;
+    private bool busy;
+    private string? error;
+    private string? successMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null || Session.User.Role != UserRoles.Candidate)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        await LoadHistoryAsync();
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        loading = true;
+        try
+        {
+            documents = await Http.GetFromJsonAsync<List<CandidateDocumentResponse>>("api/profile/cv/history");
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nepodařilo se načíst seznam nahraných dokumentů.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        error = null;
+        successMessage = null;
+        selectedFile = e.File;
+
+        if (selectedFile.Size > MaxFileSizeBytes)
+        {
+            error = "Soubor překračuje maximální povolenou velikost 10 MB.";
+            selectedFile = null;
+        }
+    }
+
+    private async Task UploadAsync()
+    {
+        if (selectedFile is null)
+            return;
+
+        uploading = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var content = new MultipartFormDataContent();
+            await using var fileStream = selectedFile.OpenReadStream(MaxFileSizeBytes);
+            using var fileContent = new StreamContent(fileStream);
+
+            if (!string.IsNullOrWhiteSpace(selectedFile.ContentType))
+            {
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue(selectedFile.ContentType);
+            }
+
+            content.Add(fileContent, "file", selectedFile.Name);
+
+            using var response = await Http.PostAsync($"api/profile/cv?setAsCurrent={setAsCurrent.ToString().ToLowerInvariant()}",
+content);
+            if (response.IsSuccessStatusCode)
+            {
+                selectedFile = null;
+                successMessage = "Životopis byl úspěšně nahrán.";
+                await LoadHistoryAsync();
+            }
+            else
+            {
+                var problem = await response.Content.ReadFromJsonAsync<ApiErrorMessage>();
+                error = problem?.Message ?? "Nahrání souboru selhalo. Ověřte, že jde o platný soubor .pdf nebo .docx.";
+            }
+        }
+        catch (Exception)
+        {
+            error = "Chyba při nahrávání souboru.";
+        }
+        finally
+        {
+            uploading = false;
+        }
+    }
+
+    private async Task SetCurrentAsync(Guid documentId)
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.PutAsJsonAsync("api/profile/cv/current", new SetCurrentCvRequest
+            {
+                DocumentId = documentId
+            });
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Aktivní životopis byl změněn.";
+                await LoadHistoryAsync();
+            }
+            else
+            {
+                var body = await response.Content.ReadAsStringAsync();
+                error = "Nepodařilo se nastavit aktivní životopis.";
+            }
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DownloadAsync(CandidateDocumentResponse doc)
+    {
+        busy = true;
+        error = null;
+
+        try
+        {
+            using var response = await Http.GetAsync($"api/profile/cv/{doc.Id}/download");
+            if (!response.IsSuccessStatusCode)
+            {
+                error = "Soubor se nepodařilo stáhnout.";
+                return;
+            }
+
+            var bytes = await response.Content.ReadAsByteArrayAsync();
+            var base64 = Convert.ToBase64String(bytes);
+
+            await JS.InvokeVoidAsync(
+                "eval",
+                $$"""
+                (() => {
+                    const a = document.createElement('a');
+                    a.href = 'data:{{doc.MimeType}};base64,{{base64}}';
+                    a.download = {{System.Text.Json.JsonSerializer.Serialize(doc.OriginalFilename)}};
+                    document.body.appendChild(a);
+                    a.click();
+                    a.remove();
+                })()
+                """);
+        }
+        catch (Exception)
+        {
+            error = "Chyba při stahování souboru.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private static string FormatSize(long bytes)
+    {
+        if (bytes >= 1024 * 1024)
+            return $"{bytes / (1024.0 * 1024.0):F2} MB";
+        if (bytes >= 1024)
+            return $"{bytes / 1024.0:F1} KB";
+        return $"{bytes} B";
+    }
+
+    private sealed record ApiErrorMessage(string? Message);
+}
