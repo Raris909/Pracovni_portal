@@ -8,7 +8,7 @@ namespace Portal.Api.Profiles;
 
 [ApiController]
 [Authorize(Policy = UserRoles.Candidate)]
-[Route("api/profiles/me")]
+[Route("api/profile")]
 public sealed class CandidateProfilesController(ICandidateProfileRepository profiles) : ControllerBase
 {
     [HttpGet]
@@ -42,9 +42,30 @@ public sealed class CandidateProfilesController(ICandidateProfileRepository prof
 
 [ApiController]
 [Authorize(Policy = UserRoles.Candidate)]
-[Route("api/profiles/me/experiences")]
+[Route("api/profile/experiences")]
 public sealed class CandidateExperiencesController(ICandidateProfileRepository profiles) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<CandidateExperienceResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<CandidateExperienceResponse>>> List(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        return Ok(await profiles.GetExperiencesAsync(userId, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(CandidateExperienceResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CandidateExperienceResponse>> Get(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        var experience = await profiles.GetExperienceAsync(userId, id, cancellationToken);
+        if (experience is null)
+            return NotFound();
+
+        return experience;
+    }
+
     [HttpPost]
     [ProducesResponseType(typeof(CandidateExperienceResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -53,7 +74,7 @@ public sealed class CandidateExperiencesController(ICandidateProfileRepository p
     {
         var userId = Guid.Parse(User.FindFirstValue("sub")!);
         var experience = await profiles.AddExperienceAsync(userId, request, cancellationToken);
-        return CreatedAtAction(null, experience);
+        return CreatedAtAction(nameof(Get), new { id = experience.Id }, experience);
     }
 
     [HttpPut("{id:guid}")]
@@ -86,9 +107,30 @@ public sealed class CandidateExperiencesController(ICandidateProfileRepository p
 
 [ApiController]
 [Authorize(Policy = UserRoles.Candidate)]
-[Route("api/profiles/me/education")]
+[Route("api/profile/education")]
 public sealed class CandidateEducationController(ICandidateProfileRepository profiles) : ControllerBase
 {
+    [HttpGet]
+    [ProducesResponseType(typeof(IReadOnlyList<CandidateEducationResponse>), StatusCodes.Status200OK)]
+    public async Task<ActionResult<IReadOnlyList<CandidateEducationResponse>>> List(CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        return Ok(await profiles.GetEducationAsync(userId, cancellationToken));
+    }
+
+    [HttpGet("{id:guid}")]
+    [ProducesResponseType(typeof(CandidateEducationResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<CandidateEducationResponse>> Get(Guid id, CancellationToken cancellationToken)
+    {
+        var userId = Guid.Parse(User.FindFirstValue("sub")!);
+        var education = await profiles.GetEducationByIdAsync(userId, id, cancellationToken);
+        if (education is null)
+            return NotFound();
+
+        return education;
+    }
+
     [HttpPost]
     [ProducesResponseType(typeof(CandidateEducationResponse), StatusCodes.Status201Created)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -97,7 +139,7 @@ public sealed class CandidateEducationController(ICandidateProfileRepository pro
     {
         var userId = Guid.Parse(User.FindFirstValue("sub")!);
         var education = await profiles.AddEducationAsync(userId, request, cancellationToken);
-        return CreatedAtAction(null, education);
+        return CreatedAtAction(nameof(Get), new { id = education.Id }, education);
     }
 
     [HttpPut("{id:guid}")]

@@ -8,11 +8,19 @@ public interface ICandidateProfileRepository
 
     Task<CandidateProfileResponse?> UpdateProfileAsync(Guid userId, UpdateCandidateProfileRequest request, CancellationToken cancellationToken);
 
+    Task<IReadOnlyList<CandidateExperienceResponse>> GetExperiencesAsync(Guid userId, CancellationToken cancellationToken);
+
+    Task<CandidateExperienceResponse?> GetExperienceAsync(Guid userId, Guid experienceId, CancellationToken cancellationToken);
+
     Task<CandidateExperienceResponse> AddExperienceAsync(Guid userId, CandidateExperienceRequest request, CancellationToken cancellationToken);
 
     Task<CandidateExperienceResponse?> UpdateExperienceAsync(Guid userId, Guid experienceId, CandidateExperienceRequest request, CancellationToken cancellationToken);
 
     Task<bool> RemoveExperienceAsync(Guid userId, Guid experienceId, CancellationToken cancellationToken);
+
+    Task<IReadOnlyList<CandidateEducationResponse>> GetEducationAsync(Guid userId, CancellationToken cancellationToken);
+
+    Task<CandidateEducationResponse?> GetEducationByIdAsync(Guid userId, Guid educationId, CancellationToken cancellationToken);
 
     Task<CandidateEducationResponse> AddEducationAsync(Guid userId, CandidateEducationRequest request, CancellationToken cancellationToken);
 
