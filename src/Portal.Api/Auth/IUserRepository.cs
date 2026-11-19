@@ -23,8 +23,23 @@ public interface IUserRepository
         Guid userId,
         CancellationToken cancellationToken);
 
+    Task<(UserResponse? User, string? PasswordHash)> FindWithPasswordHashByIdAsync(
+        Guid userId,
+        CancellationToken cancellationToken);
+
+    Task<UserResponse?> UpdateUserAsync(
+        Guid userId,
+        string firstName,
+        string lastName,
+        string? phone,
+        CancellationToken cancellationToken);
+
     Task UpdatePasswordHashAsync(
         Guid userId,
         string newPasswordHash,
+        CancellationToken cancellationToken);
+
+    Task<bool> DeactivateUserAsync(
+        Guid userId,
         CancellationToken cancellationToken);
 }
