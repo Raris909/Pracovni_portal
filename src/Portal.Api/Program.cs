@@ -61,6 +61,8 @@ builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplication
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
 builder.Services.AddHttpClient<ICvAnalysisClient, GeminiCvAnalysisClient>();
 
+builder.Services.AddScoped<ICompanyApplicationRepository, CompanyApplicationRepository>();
+
 builder.Services.Configure<DocumentStorageOptions>(
     builder.Configuration.GetSection(DocumentStorageOptions.SectionName));
 builder.Services.AddSingleton<IDocumentStorage, LocalFileSystemDocumentStorage>();
