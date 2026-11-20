@@ -1,4 +1,6 @@
 using System.Text;
+using DotNetEnv;
+using DotNetEnv.Configuration;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
@@ -7,17 +9,28 @@ using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using Npgsql;
+using Portal.Api.Ai;
+using Portal.Api.Applications;
 using Portal.Api.Auth;
 using Portal.Api.Chat;
 using Portal.Api.Companies;
+using Portal.Api.CvReviews;
 using Portal.Api.Health;
 using Portal.Api.Jobs;
 using Portal.Api.Profiles;
+using Portal.Api.Recruitment;
 using Portal.Api.Profiles.Storage;
 using Portal.Contracts.Auth;
-using Portal.Api.Applications;
 
 var builder = WebApplication.CreateBuilder(args);
+
+if (builder.Environment.IsDevelopment())
+{
+    var envPath = Path.GetFullPath("../../.env", builder.Environment.ContentRootPath);
+    builder.Configuration.AddDotNetEnv(envPath, LoadOptions.NoEnvVars())
+        .AddEnvironmentVariables()
+        .AddCommandLine(args);
+}
 
 builder.Services.AddControllers();
 builder.Services.AddProblemDetails();
@@ -36,8 +49,23 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
+builder.Services.AddScoped<ICvReviewRepository, CvReviewRepository>();
+builder.Services.AddScoped<IRecruitmentStageRepository, RecruitmentStageRepository>();
+builder.Services.AddScoped<IApplicationStageRepository, ApplicationStageRepository>();
+builder.Services.AddScoped<ICandidateEvaluationRepository, CandidateEvaluationRepository>();
+builder.Services.AddScoped<IInterviewSlotRepository, InterviewSlotRepository>();
+builder.Services.AddScoped<IInterviewBookingRepository, InterviewBookingRepository>();
 
 builder.Services.AddScoped<IApplicationSubmissionService, ApplicationSubmissionService>();
+builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
+builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
+builder.Services.AddHttpClient<ICvAnalysisClient, GeminiCvAnalysisClient>();
+
+builder.Services.Configure<DocumentStorageOptions>(
+    builder.Configuration.GetSection(DocumentStorageOptions.SectionName));
+builder.Services.AddSingleton<IDocumentStorage, LocalFileSystemDocumentStorage>();
+builder.Services.AddScoped<ICandidateDocumentRepository, CandidateDocumentRepository>();
+builder.Services.AddScoped<CandidateCvService>();
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();
 builder.Services.AddOptions<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme)
