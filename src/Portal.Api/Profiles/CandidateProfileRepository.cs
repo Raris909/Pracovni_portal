@@ -38,11 +38,42 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         profileCmd.Parameters.AddWithValue(NpgsqlDbType.Text, (object?)request.CountryCode?.Trim().ToUpperInvariant() ?? DBNull.Value);
         profileCmd.Parameters.AddWithValue(NpgsqlDbType.Array | NpgsqlDbType.Text, request.Skills.Select(s => s.Trim()).ToArray());
         profileCmd.Parameters.AddWithValue(userId);
-        await profileCmd.ExecuteNonQueryAsync(cancellationToken);
+        if (await profileCmd.ExecuteNonQueryAsync(cancellationToken) == 0)
+            return null;
 
         await transaction.CommitAsync(cancellationToken);
 
         return await ReadProfileInternalAsync(connection, userId, cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<CandidateExperienceResponse>> GetExperiencesAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await using var command = database.CreateCommand("""
+            SELECT id, employer, position, description, start_date, end_date
+            FROM portal.candidate_experiences
+            WHERE candidate_id = $1 ORDER BY start_date DESC, id
+            """);
+        command.Parameters.AddWithValue(userId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var experiences = new List<CandidateExperienceResponse>();
+        while (await reader.ReadAsync(cancellationToken))
+            experiences.Add(ReadExperience(reader));
+
+        return experiences;
+    }
+
+    public async Task<CandidateExperienceResponse?> GetExperienceAsync(Guid userId, Guid experienceId, CancellationToken cancellationToken)
+    {
+        await using var command = database.CreateCommand("""
+            SELECT id, employer, position, description, start_date, end_date
+            FROM portal.candidate_experiences WHERE id = $1 AND candidate_id = $2
+            """);
+        command.Parameters.AddWithValue(experienceId);
+        command.Parameters.AddWithValue(userId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadExperience(reader) : null;
     }
 
     public async Task<CandidateExperienceResponse> AddExperienceAsync(Guid userId, CandidateExperienceRequest request, CancellationToken cancellationToken)
@@ -50,7 +81,7 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         await using var command = database.CreateCommand("""
             INSERT INTO portal.candidate_experiences (candidate_id, employer, position, description, start_date, end_date)
             VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id
+            RETURNING id, employer, position, description, start_date, end_date
             """);
 
         command.Parameters.AddWithValue(userId);
@@ -60,9 +91,9 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         command.Parameters.AddWithValue(request.StartDate);
         command.Parameters.AddWithValue(NpgsqlDbType.Date, (object?)request.EndDate ?? DBNull.Value);
 
-        var id = (Guid)(await command.ExecuteScalarAsync(cancellationToken))!;
-
-        return new CandidateExperienceResponse(id, request.Employer, request.Position, request.Description, request.StartDate, request.EndDate);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+        return ReadExperience(reader);
     }
 
     public async Task<CandidateExperienceResponse?> UpdateExperienceAsync(Guid userId, Guid experienceId, CandidateExperienceRequest request, CancellationToken cancellationToken)
@@ -71,7 +102,7 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
             UPDATE portal.candidate_experiences
             SET employer = $2, position = $3, description = $4, start_date = $5, end_date = $6
             WHERE id = $1 AND candidate_id = $7
-            RETURNING id
+            RETURNING id, employer, position, description, start_date, end_date
             """);
 
         command.Parameters.AddWithValue(experienceId);
@@ -82,10 +113,8 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         command.Parameters.AddWithValue(NpgsqlDbType.Date, (object?)request.EndDate ?? DBNull.Value);
         command.Parameters.AddWithValue(userId);
 
-        if (await command.ExecuteScalarAsync(cancellationToken) is null)
-            return null;
-
-        return new CandidateExperienceResponse(experienceId, request.Employer, request.Position, request.Description, request.StartDate, request.EndDate);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadExperience(reader) : null;
     }
 
     public async Task<bool> RemoveExperienceAsync(Guid userId, Guid experienceId, CancellationToken cancellationToken)
@@ -99,12 +128,42 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         return await command.ExecuteNonQueryAsync(cancellationToken) > 0;
     }
 
+    public async Task<IReadOnlyList<CandidateEducationResponse>> GetEducationAsync(Guid userId, CancellationToken cancellationToken)
+    {
+        await using var command = database.CreateCommand("""
+            SELECT id, school, field_of_study, degree, start_date, end_date
+            FROM portal.candidate_education
+            WHERE candidate_id = $1 ORDER BY start_date DESC, id
+            """);
+        command.Parameters.AddWithValue(userId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        var education = new List<CandidateEducationResponse>();
+        while (await reader.ReadAsync(cancellationToken))
+            education.Add(ReadEducation(reader));
+
+        return education;
+    }
+
+    public async Task<CandidateEducationResponse?> GetEducationByIdAsync(Guid userId, Guid educationId, CancellationToken cancellationToken)
+    {
+        await using var command = database.CreateCommand("""
+            SELECT id, school, field_of_study, degree, start_date, end_date
+            FROM portal.candidate_education WHERE id = $1 AND candidate_id = $2
+            """);
+        command.Parameters.AddWithValue(educationId);
+        command.Parameters.AddWithValue(userId);
+
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadEducation(reader) : null;
+    }
+
     public async Task<CandidateEducationResponse> AddEducationAsync(Guid userId, CandidateEducationRequest request, CancellationToken cancellationToken)
     {
         await using var command = database.CreateCommand("""
             INSERT INTO portal.candidate_education (candidate_id, school, field_of_study, degree, start_date, end_date)
             VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id
+            RETURNING id, school, field_of_study, degree, start_date, end_date
             """);
 
         command.Parameters.AddWithValue(userId);
@@ -114,9 +173,9 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         command.Parameters.AddWithValue(request.StartDate);
         command.Parameters.AddWithValue(NpgsqlDbType.Date, (object?)request.EndDate ?? DBNull.Value);
 
-        var id = (Guid)(await command.ExecuteScalarAsync(cancellationToken))!;
-
-        return new CandidateEducationResponse(id, request.School, request.FieldOfStudy, request.Degree, request.StartDate, request.EndDate);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        await reader.ReadAsync(cancellationToken);
+        return ReadEducation(reader);
     }
 
     public async Task<CandidateEducationResponse?> UpdateEducationAsync(Guid userId, Guid educationId, CandidateEducationRequest request, CancellationToken cancellationToken)
@@ -125,7 +184,7 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
             UPDATE portal.candidate_education
             SET school = $2, field_of_study = $3, degree = $4, start_date = $5, end_date = $6
             WHERE id = $1 AND candidate_id = $7
-            RETURNING id
+            RETURNING id, school, field_of_study, degree, start_date, end_date
             """);
 
         command.Parameters.AddWithValue(educationId);
@@ -136,10 +195,8 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         command.Parameters.AddWithValue(NpgsqlDbType.Date, (object?)request.EndDate ?? DBNull.Value);
         command.Parameters.AddWithValue(userId);
 
-        if (await command.ExecuteScalarAsync(cancellationToken) is null)
-            return null;
-
-        return new CandidateEducationResponse(educationId, request.School, request.FieldOfStudy, request.Degree, request.StartDate, request.EndDate);
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken);
+        return await reader.ReadAsync(cancellationToken) ? ReadEducation(reader) : null;
     }
 
     public async Task<bool> RemoveEducationAsync(Guid userId, Guid educationId, CancellationToken cancellationToken)
@@ -154,7 +211,7 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
     }
 
     private static async Task<CandidateProfileResponse?> ReadProfileInternalAsync(
-    NpgsqlConnection connection, Guid userId, CancellationToken cancellationToken)
+        NpgsqlConnection connection, Guid userId, CancellationToken cancellationToken)
     {
         await using var command = new NpgsqlCommand("""
         SELECT u.id, u.email, u.first_name, u.last_name, u.phone,
@@ -193,27 +250,27 @@ public sealed class CandidateProfileRepository(NpgsqlDataSource database) : ICan
         await reader.NextResultAsync(cancellationToken);
         var experiences = new List<CandidateExperienceResponse>();
         while (await reader.ReadAsync(cancellationToken))
-        {
-            experiences.Add(new CandidateExperienceResponse(
-                reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.GetFieldValue<DateOnly>(4),
-                reader.IsDBNull(5) ? null : reader.GetFieldValue<DateOnly>(5)));
-        }
+            experiences.Add(ReadExperience(reader));
 
         await reader.NextResultAsync(cancellationToken);
         var education = new List<CandidateEducationResponse>();
         while (await reader.ReadAsync(cancellationToken))
-        {
-            education.Add(new CandidateEducationResponse(
-                reader.GetGuid(0), reader.GetString(1),
-                reader.IsDBNull(2) ? null : reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.GetFieldValue<DateOnly>(4),
-                reader.IsDBNull(5) ? null : reader.GetFieldValue<DateOnly>(5)));
-        }
+            education.Add(ReadEducation(reader));
 
         return new CandidateProfileResponse(userId, email, firstName, lastName, phone,
             headline, summary, city, countryCode, skills, experiences, education, cvId, createdAt, updatedAt);
     }
+
+    private static CandidateExperienceResponse ReadExperience(NpgsqlDataReader reader) => new(
+        reader.GetGuid(0), reader.GetString(1), reader.GetString(2),
+        reader.IsDBNull(3) ? null : reader.GetString(3),
+        reader.GetFieldValue<DateOnly>(4),
+        reader.IsDBNull(5) ? null : reader.GetFieldValue<DateOnly>(5));
+
+    private static CandidateEducationResponse ReadEducation(NpgsqlDataReader reader) => new(
+        reader.GetGuid(0), reader.GetString(1),
+        reader.IsDBNull(2) ? null : reader.GetString(2),
+        reader.IsDBNull(3) ? null : reader.GetString(3),
+        reader.GetFieldValue<DateOnly>(4),
+        reader.IsDBNull(5) ? null : reader.GetFieldValue<DateOnly>(5));
 }

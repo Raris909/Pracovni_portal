@@ -58,14 +58,18 @@ flowchart TD
 | `POST /api/auth/register` | Veřejný | `201` + JWT; duplicitní e-mail `409` |
 | `POST /api/auth/login` | Veřejný | `200` + JWT; nesprávné údaje `401` |
 | `GET /api/auth/me` | JWT | Aktivní vlastní účet; jinak `401` |
-| `GET /api/profiles/me` | Aktivní účet `candidate` | Získání kompletního profilu uchazeče (údaje, praxe, vzdělání) |
-| `PUT /api/profiles/me` | Aktivní účet `candidate` | Aktualizace základních údajů a dovedností v profilu; `200` |
-| `POST /api/profiles/me/experiences` | Aktivní účet `candidate` | Přidání nové pracovní zkušenosti; `201` |
-| `PUT /api/profiles/me/experiences/{id}` | Aktivní účet `candidate` | Úprava pracovní zkušenosti; neexistující `404` |
-| `DELETE /api/profiles/me/experiences/{id}`| Aktivní účet `candidate` | Smazání pracovní zkušenosti; `204`, neexistující `404` |
-| `POST /api/profiles/me/education` | Aktivní účet `candidate` | Přidání záznamu o vzdělání; `201` |
-| `PUT /api/profiles/me/education/{id}` | Aktivní účet `candidate` | Úprava záznamu o vzdělání; neexistující `404` |
-| `DELETE /api/profiles/me/education/{id}` | Aktivní účet `candidate` | Smazání záznamu o vzdělání; `204`, neexistující `404` |
+| `GET /api/profile` | JWT `candidate` | Získání kompletního profilu uchazeče (údaje, praxe, vzdělání) |
+| `PUT /api/profile` | JWT `candidate` | Aktualizace základních údajů a dovedností v profilu; `200` |
+| `GET /api/profile/experiences` | JWT `candidate` | Seznam vlastních pracovních zkušeností |
+| `GET /api/profile/experiences/{id}` | JWT `candidate` | Detail vlastní pracovní zkušenosti; cizí či neexistující `404` |
+| `POST /api/profile/experiences` | JWT `candidate` | Přidání nové pracovní zkušenosti; `201` + `Location` detailu |
+| `PUT /api/profile/experiences/{id}` | JWT `candidate` | Úprava pracovní zkušenosti; cizí či neexistující `404` |
+| `DELETE /api/profile/experiences/{id}`| JWT `candidate` | Smazání pracovní zkušenosti; `204`, cizí či neexistující `404` |
+| `GET /api/profile/education` | JWT `candidate` | Seznam vlastního vzdělání |
+| `GET /api/profile/education/{id}` | JWT `candidate` | Detail vlastního vzdělání; cizí či neexistující `404` |
+| `POST /api/profile/education` | JWT `candidate` | Přidání záznamu o vzdělání; `201` + `Location` detailu |
+| `PUT /api/profile/education/{id}` | JWT `candidate` | Úprava záznamu o vzdělání; cizí či neexistující `404` |
+| `DELETE /api/profile/education/{id}` | JWT `candidate` | Smazání záznamu o vzdělání; `204`, cizí či neexistující `404` |
 | `POST /api/companies` | Aktivní účet `company` | Vytvoření firmy a členství zakladatele `owner` v jedné transakci; `201` + detail, duplicita registračního čísla v zemi `409` |
 | `GET /api/companies` | JWT `company` | Seznam firem s vlastním aktivním členstvím a aktivním firemním účtem |
 | `GET /api/companies/{companyId}` | Aktivní účet `company` a členství | Firma a vlastní členství; nepřístupná či neexistující firma `404` |
