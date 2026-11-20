@@ -56,6 +56,7 @@ builder.Services.AddScoped<ICandidateEvaluationRepository, CandidateEvaluationRe
 builder.Services.AddScoped<IInterviewSlotRepository, InterviewSlotRepository>();
 builder.Services.AddScoped<IInterviewBookingRepository, InterviewBookingRepository>();
 
+builder.Services.AddScoped<IApplicationSubmissionService, ApplicationSubmissionService>();
 builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
 builder.Services.AddHttpClient<ICvAnalysisClient, GeminiCvAnalysisClient>();
