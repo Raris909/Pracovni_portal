@@ -7,15 +7,23 @@ namespace Portal.Contracts.Recruitment;
 /// Enforces DB constraint <c>ends_at > starts_at</c>.
 /// </summary>
 public sealed record UpsertInterviewSlotRequest(
-    [property: Required] Guid InterviewerMemberId,
-    [property: Required] DateTimeOffset StartsAt,
-    [property: Required] DateTimeOffset EndsAt,
+    Guid InterviewerMemberId,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
     string? Location = null,
     string? MeetingUrl = null,
     bool IsActive = true) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (StartsAt == default)
+            yield return new ValidationResult("StartsAt is required.", [nameof(StartsAt)]);
+        if (EndsAt == default)
+            yield return new ValidationResult("EndsAt is required.", [nameof(EndsAt)]);
+        if (MeetingUrl is not null && (!Uri.TryCreate(MeetingUrl, UriKind.Absolute, out var url)
+            || (url.Scheme != Uri.UriSchemeHttp && url.Scheme != Uri.UriSchemeHttps)))
+            yield return new ValidationResult("MeetingUrl must be an absolute HTTP or HTTPS URL.", [nameof(MeetingUrl)]);
+
         if (InterviewerMemberId == Guid.Empty)
         {
             yield return new ValidationResult(
@@ -23,7 +31,8 @@ public sealed record UpsertInterviewSlotRequest(
                 [nameof(InterviewerMemberId)]);
         }
 
-        if (EndsAt <= StartsAt)
+        // PostgreSQL stores timestamps with microsecond precision.
+        if (EndsAt.UtcTicks / TimeSpan.TicksPerMicrosecond <= StartsAt.UtcTicks / TimeSpan.TicksPerMicrosecond)
         {
             yield return new ValidationResult(
                 "EndsAt must be strictly greater than StartsAt.",
@@ -52,10 +61,10 @@ public sealed record InterviewSlotResponse(
     DateTimeOffset UpdatedAt);
 
 /// <summary>
-/// Request by a candidate (or HR member) to book an available interview slot (<c>portal.interview_bookings</c>).
+/// Request by a candidate to book an available interview slot (<c>portal.interview_bookings</c>).
 /// </summary>
 public sealed record CreateInterviewBookingRequest(
-    [property: Required] Guid SlotId) : IValidatableObject
+    Guid SlotId) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {

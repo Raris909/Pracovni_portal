@@ -6,11 +6,14 @@ namespace Portal.Contracts.Recruitment;
 /// Request by a company member to create or update a candidate evaluation (<c>portal.candidate_evaluations</c>).
 /// </summary>
 public sealed record UpsertCandidateEvaluationRequest(
-    [property: Range(0, 100)] short? Score,
-    [property: Required, MinLength(1)] string Note) : IValidatableObject
+    short? Score,
+    string Note) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
+        if (Score is < 0 or > 100)
+            yield return new ValidationResult("Evaluation score must be between 0 and 100.", [nameof(Score)]);
+
         if (string.IsNullOrWhiteSpace(Note))
         {
             yield return new ValidationResult(

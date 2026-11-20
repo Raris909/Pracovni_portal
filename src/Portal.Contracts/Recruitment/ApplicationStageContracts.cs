@@ -9,7 +9,7 @@ namespace Portal.Contracts.Recruitment;
 /// - <c>status IN ('passed', 'failed', 'skipped')</c> requires both <c>StartedAt</c> and <c>CompletedAt >= StartedAt</c>.
 /// </summary>
 public sealed record UpdateApplicationStageStatusRequest(
-    [property: Required] string Status,
+    string Status,
     DateTimeOffset? StartedAt = null,
     DateTimeOffset? CompletedAt = null) : IValidatableObject
 {

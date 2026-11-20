@@ -6,9 +6,9 @@ namespace Portal.Contracts.Recruitment;
 /// Request to create or update a recruitment round (<c>portal.recruitment_stages</c>) for a job offer.
 /// </summary>
 public sealed record UpsertRecruitmentStageRequest(
-    [property: Required, MinLength(1)] string Name,
-    [property: Required] string Kind,
-    [property: Range(1, int.MaxValue)] int Position,
+    string Name,
+    string Kind,
+    int Position,
     string? Description = null) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
@@ -26,6 +26,9 @@ public sealed record UpsertRecruitmentStageRequest(
                 $"Invalid stage kind '{Kind}'. Allowed values: {string.Join(", ", RecruitmentStageKinds.All)}.",
                 [nameof(Kind)]);
         }
+
+        if (Position < 1)
+            yield return new ValidationResult("Stage position must be positive.", [nameof(Position)]);
     }
 }
 
@@ -33,7 +36,20 @@ public sealed record UpsertRecruitmentStageRequest(
 /// Request to reorder recruitment rounds for a job offer.
 /// </summary>
 public sealed record ReorderRecruitmentStagesRequest(
-    [property: Required, MinLength(1)] IReadOnlyList<Guid> OrderedStageIds);
+    IReadOnlyList<Guid> OrderedStageIds) : IValidatableObject
+{
+    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
+    {
+        if (OrderedStageIds is null || OrderedStageIds.Count == 0)
+        {
+            yield return new ValidationResult("Provide all stage IDs in the requested order.", [nameof(OrderedStageIds)]);
+            yield break;
+        }
+
+        if (OrderedStageIds.Contains(Guid.Empty) || OrderedStageIds.Distinct().Count() != OrderedStageIds.Count)
+            yield return new ValidationResult("Stage IDs must be non-empty and unique.", [nameof(OrderedStageIds)]);
+    }
+}
 
 /// <summary>
 /// Response representing a recruitment round (<c>portal.recruitment_stages</c>).
