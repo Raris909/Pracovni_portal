@@ -49,6 +49,9 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
+
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
+
 builder.Services.AddScoped<ICvReviewRepository, CvReviewRepository>();
 builder.Services.AddScoped<IRecruitmentStageRepository, RecruitmentStageRepository>();
 builder.Services.AddScoped<IApplicationStageRepository, ApplicationStageRepository>();
