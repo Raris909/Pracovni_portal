@@ -1,4 +1,5 @@
 using Npgsql;
+using NpgsqlTypes;
 using Portal.Contracts.Chat;
 
 namespace Portal.Api.Chat;
@@ -186,7 +187,7 @@ public sealed class ChatRepository : IChatRepository
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = new NpgsqlCommand(sql, connection);
         cmd.Parameters.AddWithValue("ConversationId", conversationId);
-        cmd.Parameters.AddWithValue("Before", (object?)before ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("Before", NpgsqlDbType.TimestampTz, (object?)before ?? DBNull.Value);
         cmd.Parameters.AddWithValue("Limit", clampedLimit);
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);

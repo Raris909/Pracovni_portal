@@ -37,7 +37,7 @@ public sealed record ChatMessageResponse(
 /// Request to send a new message in a conversation via REST API.
 /// </summary>
 public sealed record SendChatMessageRequest(
-    [property: Required, MinLength(1)] string Content) : IValidatableObject
+    [Required, MinLength(1)] string Content) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
