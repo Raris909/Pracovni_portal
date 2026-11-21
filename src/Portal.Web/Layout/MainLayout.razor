@@ -14,6 +14,13 @@
                 <NavLink href="profile">Můj profil</NavLink>
                 <NavLink href="profile/cv">Životopisy</NavLink>
             }
+            @if (user.Role == UserRoles.Company)
+            {
+                <NavLink href="company/jobs">Správa pozic</NavLink>
+                <NavLink href="company/team">HR Tým</NavLink>
+                <NavLink href="company/profile">Profil firmy</NavLink>
+            }
+
             <NavLink href="account">Můj účet</NavLink>
             <span>@user.FirstName @user.LastName</span>
             <button type="button" @onclick="Logout">Odhlásit se</button>
@@ -29,7 +36,7 @@
 
 @code {
     protected override void OnInitialized() => Session.Changed += OnSessionChanged;
-    private void OnSessionChanged() => StateHasChanged();
+    private void OnSessionChanged() => InvokeAsync(StateHasChanged);
     private void Logout()
     {
         Session.Logout();

@@ -49,6 +49,9 @@ builder.Services.AddScoped<ICompanyRepository, CompanyRepository>();
 builder.Services.AddScoped<CompanyMembershipService>();
 builder.Services.AddScoped<IJobOfferRepository, JobOfferRepository>();
 builder.Services.AddScoped<ICandidateProfileRepository, CandidateProfileRepository>();
+
+builder.Services.AddScoped<IChatRepository, ChatRepository>();
+
 builder.Services.AddScoped<ICvReviewRepository, CvReviewRepository>();
 builder.Services.AddScoped<IRecruitmentStageRepository, RecruitmentStageRepository>();
 builder.Services.AddScoped<IApplicationStageRepository, ApplicationStageRepository>();
@@ -56,9 +59,12 @@ builder.Services.AddScoped<ICandidateEvaluationRepository, CandidateEvaluationRe
 builder.Services.AddScoped<IInterviewSlotRepository, InterviewSlotRepository>();
 builder.Services.AddScoped<IInterviewBookingRepository, InterviewBookingRepository>();
 
+builder.Services.AddScoped<IApplicationSubmissionService, ApplicationSubmissionService>();
 builder.Services.AddScoped<ICandidateApplicationRepository, CandidateApplicationRepository>();
 builder.Services.Configure<GeminiOptions>(builder.Configuration.GetSection(GeminiOptions.SectionName));
 builder.Services.AddHttpClient<ICvAnalysisClient, GeminiCvAnalysisClient>();
+
+builder.Services.AddScoped<ICompanyApplicationRepository, CompanyApplicationRepository>();
 
 builder.Services.Configure<DocumentStorageOptions>(
     builder.Configuration.GetSection(DocumentStorageOptions.SectionName));

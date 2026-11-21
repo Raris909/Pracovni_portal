@@ -88,3 +88,75 @@ public sealed record CandidateApplicationStageProgressResponse(
     DateTimeOffset? StartedAt,
     DateTimeOffset? CompletedAt,
     DateTimeOffset? UpdatedAt);
+
+    /// <summary>
+/// Summary item for a company member listing applications received for the company's job offers.
+/// </summary>
+public sealed record CompanyApplicationSummaryResponse(
+    Guid Id,
+    Guid JobOfferId,
+    string JobTitle,
+    Guid CompanyId,
+    Guid CandidateId,
+    string CandidateFirstName,
+    string CandidateLastName,
+    string CandidateEmail,
+    Guid? AssignedMemberId,
+    string Status,
+    int AttachedDocumentsCount,
+    DateTimeOffset SubmittedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>
+/// Full detail of a received application for a company HR member, including the candidate's
+/// immutable profile snapshot, cover message, and attached document metadata.
+/// </summary>
+public sealed record CompanyApplicationDetailResponse(
+    Guid Id,
+    Guid JobOfferId,
+    string JobTitle,
+    Guid CompanyId,
+    Guid CandidateId,
+    Guid? AssignedMemberId,
+    string Status,
+    string? CoverMessage,
+    ApplicationProfileSnapshot ProfileSnapshot,
+    IReadOnlyList<ApplicationAttachedDocumentResponse> AttachedDocuments,
+    IReadOnlyList<CandidateApplicationStageProgressResponse> Stages,
+    Guid? ConversationId,
+    DateTimeOffset SubmittedAt,
+    DateTimeOffset UpdatedAt);
+
+/// <summary>
+/// Request by a company member to update the status of a received application.
+/// Company members can transition applications to <c>in_progress</c>, <c>accepted</c>, or <c>rejected</c>.
+/// </summary>
+public sealed record UpdateCompanyApplicationStatusRequest(
+    [property: System.ComponentModel.DataAnnotations.Required] string Status) : System.ComponentModel.DataAnnotations.IValidatableObject
+{
+    private static readonly IReadOnlySet<string> AllowedCompanyStatuses = new HashSet<string>
+    {
+        ApplicationStatuses.Submitted,
+        ApplicationStatuses.InProgress,
+        ApplicationStatuses.Rejected,
+        ApplicationStatuses.Accepted
+    };
+
+    public IEnumerable<System.ComponentModel.DataAnnotations.ValidationResult> Validate(
+        System.ComponentModel.DataAnnotations.ValidationContext validationContext)
+    {
+        if (string.IsNullOrWhiteSpace(Status) || !AllowedCompanyStatuses.Contains(Status.Trim().ToLowerInvariant()))
+        {
+            yield return new System.ComponentModel.DataAnnotations.ValidationResult(
+                $"Invalid status '{Status}'. Allowed company statuses: {string.Join(", ", AllowedCompanyStatuses)}.",
+                [nameof(Status)]);
+        }
+    }
+}
+
+/// <summary>
+/// Request by a company member to assign or unassign a responsible HR member (<c>assigned_member_id</c>).
+/// Pass <c>null</c> to unassign.
+/// </summary>
+public sealed record AssignApplicationMemberRequest(
+    Guid? AssignedMemberId);
