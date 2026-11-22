@@ -19,9 +19,19 @@ public enum JobTransitionStatus
     DeadlineExpired
 }
 
+public sealed record JobOfferSearchQuery(
+    int Limit = 20,
+    int Offset = 0,
+    string? Query = null,
+    string? WorkMode = null,
+    string? EmploymentType = null,
+    string? Location = null,
+    decimal? SalaryMin = null,
+    string Sort = JobOfferSortOptions.Newest);
+
 public interface IJobOfferRepository
 {
-    Task<IReadOnlyList<JobOfferResponse>> GetPublishedJobsAsync(int limit, int offset, CancellationToken cancellationToken);
+    Task<IReadOnlyList<JobOfferResponse>> GetPublishedJobsAsync(JobOfferSearchQuery query, CancellationToken cancellationToken);
     Task<JobOfferDetailResponse?> GetPublishedJobByIdAsync(Guid jobId, CancellationToken cancellationToken);
     Task<IReadOnlyList<JobOfferManagementResponse>> GetCompanyJobsAsync(Guid companyId, int limit, int offset, CancellationToken cancellationToken);
     Task<JobOfferManagementResponse?> GetCompanyJobByIdAsync(Guid companyId, Guid jobId, CancellationToken cancellationToken);

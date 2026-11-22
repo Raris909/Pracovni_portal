@@ -16,6 +16,13 @@ public static class WorkModes
     public const string Onsite = "onsite";
     public const string Hybrid = "hybrid";
     public const string Remote = "remote";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>
+    {
+        Onsite,
+        Hybrid,
+        Remote
+    };
 }
 
 public static class EmploymentTypes
@@ -24,6 +31,28 @@ public static class EmploymentTypes
     public const string PartTime = "part_time";
     public const string Contract = "contract";
     public const string Internship = "internship";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>
+    {
+        FullTime,
+        PartTime,
+        Contract,
+        Internship
+    };
+}
+
+public static class JobOfferSortOptions
+{
+    public const string Newest = "newest";
+    public const string SalaryDesc = "salary_desc";
+    public const string DeadlineAsc = "deadline_asc";
+
+    public static readonly IReadOnlySet<string> All = new HashSet<string>
+    {
+        Newest,
+        SalaryDesc,
+        DeadlineAsc
+    };
 }
 
 public static class SalaryPeriods

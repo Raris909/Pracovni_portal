@@ -1,10 +1,69 @@
 @page "/"
+@using System.Globalization
 @using Portal.Contracts.Jobs
 @using Portal.Web.Services
 @inject HttpClient Http
+@inject NavigationManager Navigation
 
 <PageTitle>Pracovní nabídky</PageTitle>
 <h1>Pracovní nabídky</h1>
+
+<form class="search-panel" @onsubmit="ApplyFilters" @onsubmit:preventDefault>
+    <div class="search-row">
+        <label for="search-q">Hledat pozici</label>
+        <input id="search-q" type="search" @bind="searchText" placeholder="Název pozice, technologie, klíčová slova…" />
+    </div>
+
+    <div class="filter-grid">
+        <div>
+            <label for="filter-work-mode">Režim práce</label>
+            <select id="filter-work-mode" @bind="selectedWorkMode">
+                <option value="">Všechny</option>
+                <option value="@WorkModes.Onsite">@JobDisplayHelpers.GetWorkModeLabel(WorkModes.Onsite)</option>
+                <option value="@WorkModes.Hybrid">@JobDisplayHelpers.GetWorkModeLabel(WorkModes.Hybrid)</option>
+                <option value="@WorkModes.Remote">@JobDisplayHelpers.GetWorkModeLabel(WorkModes.Remote)</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="filter-employment">Typ úvazku</label>
+            <select id="filter-employment" @bind="selectedEmploymentType">
+                <option value="">Všechny</option>
+                <option value="@EmploymentTypes.FullTime">@JobDisplayHelpers.GetEmploymentTypeLabel(EmploymentTypes.FullTime)</option>
+                <option value="@EmploymentTypes.PartTime">@JobDisplayHelpers.GetEmploymentTypeLabel(EmploymentTypes.PartTime)</option>
+                <option value="@EmploymentTypes.Contract">@JobDisplayHelpers.GetEmploymentTypeLabel(EmploymentTypes.Contract)</option>
+                <option value="@EmploymentTypes.Internship">@JobDisplayHelpers.GetEmploymentTypeLabel(EmploymentTypes.Internship)</option>
+            </select>
+        </div>
+
+        <div>
+            <label for="filter-location">Lokalita</label>
+            <input id="filter-location" type="text" @bind="locationText" placeholder="např. Praha, Brno" />
+        </div>
+
+        <div>
+            <label for="filter-salary">Mzda od</label>
+            <input id="filter-salary" type="number" min="0" step="1000" @bind="salaryMinValue" placeholder="např. 60000" />
+        </div>
+
+        <div>
+            <label for="filter-sort">Řazení</label>
+            <select id="filter-sort" @bind="selectedSort">
+                <option value="@JobOfferSortOptions.Newest">Nejnovější</option>
+                <option value="@JobOfferSortOptions.SalaryDesc">Nejvyšší mzda</option>
+                <option value="@JobOfferSortOptions.DeadlineAsc">Nejbližší uzávěrka</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="actions">
+        <button type="submit" disabled="@loading">Vyhledat</button>
+        @if (HasActiveFilters)
+        {
+            <button type="button" class="btn-secondary" disabled="@loading" @onclick="ResetFilters">Vymazat filtry</button>
+        }
+    </div>
+</form>
 
 @if (error is not null)
 {
@@ -16,10 +75,15 @@ else if (jobs is null)
 }
 else if (jobs.Count == 0)
 {
-    @if (offset > 0)
+    @if (CurrentOffset > 0)
     {
         <p>Na této stránce nejsou žádné další pracovní nabídky.</p>
-        <button type="button" disabled="@loading" @onclick="PreviousAsync">Předchozí</button>
+        <button type="button" disabled="@loading" @onclick="Previous">Předchozí</button>
+    }
+    else if (HasActiveFilters)
+    {
+        <p>Zadaným filtrům neodpovídá žádná pracovní nabídka.</p>
+        <button type="button" class="btn-secondary" disabled="@loading" @onclick="ResetFilters">Vymazat filtry</button>
     }
     else
     {
@@ -43,27 +107,72 @@ else
         </article>
     }
     <div class="actions">
-        <button type="button" disabled="@(offset == 0 || loading)" @onclick="PreviousAsync">Předchozí</button>
-        <button type="button" disabled="@(jobs.Count < PageSize || loading)" @onclick="NextAsync">Další</button>
+        <button type="button" disabled="@(CurrentOffset == 0 || loading)" @onclick="Previous">Předchozí</button>
+        <button type="button" disabled="@(jobs.Count < PageSize || loading)" @onclick="Next">Další</button>
     </div>
 }
 
 @code {
     private const int PageSize = 20;
+
+    [SupplyParameterFromQuery(Name = "q")] public string? Query { get; set; }
+    [SupplyParameterFromQuery(Name = "workMode")] public string? WorkMode { get; set; }
+    [SupplyParameterFromQuery(Name = "employmentType")] public string? EmploymentType { get; set; }
+    [SupplyParameterFromQuery(Name = "location")] public string? Location { get; set; }
+    [SupplyParameterFromQuery(Name = "salaryMin")] public decimal? SalaryMin { get; set; }
+    [SupplyParameterFromQuery(Name = "sort")] public string? Sort { get; set; }
+    [SupplyParameterFromQuery(Name = "offset")] public int? Offset { get; set; }
+
+    private string? searchText;
+    private string selectedWorkMode = "";
+    private string selectedEmploymentType = "";
+    private string? locationText;
+    private decimal? salaryMinValue;
+    private string selectedSort = JobOfferSortOptions.Newest;
+
     private List<JobOfferResponse>? jobs;
     private string? error;
-    private int offset;
     private bool loading;
+    private string? lastLoadedApiUrl;
 
-    protected override Task OnInitializedAsync() => LoadAsync();
+    private int CurrentOffset => Math.Max(0, Offset ?? 0);
 
-    private async Task LoadAsync()
+    private string ActiveSort => !string.IsNullOrWhiteSpace(Sort) && JobOfferSortOptions.All.Contains(Sort)
+        ? Sort
+        : JobOfferSortOptions.Newest;
+
+    private bool HasActiveFilters =>
+        !string.IsNullOrWhiteSpace(Query)
+        || !string.IsNullOrWhiteSpace(WorkMode)
+        || !string.IsNullOrWhiteSpace(EmploymentType)
+        || !string.IsNullOrWhiteSpace(Location)
+        || SalaryMin is >= 0
+        || ActiveSort != JobOfferSortOptions.Newest;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        searchText = Query;
+        selectedWorkMode = WorkMode ?? "";
+        selectedEmploymentType = EmploymentType ?? "";
+        locationText = Location;
+        salaryMinValue = SalaryMin is >= 0 ? SalaryMin : null;
+        selectedSort = ActiveSort;
+
+        var apiUrl = BuildApiUrl();
+        if (apiUrl == lastLoadedApiUrl && jobs is not null)
+            return;
+
+        await LoadAsync(apiUrl);
+    }
+
+    private async Task LoadAsync(string apiUrl)
     {
         loading = true;
         error = null;
         try
         {
-            jobs = await Http.GetFromJsonAsync<List<JobOfferResponse>>($"api/jobs?offset={offset}&limit={PageSize}");
+            jobs = await Http.GetFromJsonAsync<List<JobOfferResponse>>(apiUrl);
+            lastLoadedApiUrl = apiUrl;
         }
         catch (HttpRequestException)
         {
@@ -75,15 +184,89 @@ else
         }
     }
 
-    private async Task PreviousAsync()
+    private void ApplyFilters() =>
+        Navigate(searchText, selectedWorkMode, selectedEmploymentType, locationText, salaryMinValue, selectedSort, 0);
+
+    private void ResetFilters()
     {
-        offset = Math.Max(0, offset - PageSize);
-        await LoadAsync();
+        searchText = null;
+        selectedWorkMode = "";
+        selectedEmploymentType = "";
+        locationText = null;
+        salaryMinValue = null;
+        selectedSort = JobOfferSortOptions.Newest;
+        lastLoadedApiUrl = null;
+        Navigation.NavigateTo("/");
     }
 
-    private async Task NextAsync()
+    private void Previous() =>
+        Navigate(Query, WorkMode, EmploymentType, Location, SalaryMin is >= 0 ? SalaryMin : null, ActiveSort,
+            Math.Max(0, CurrentOffset - PageSize));
+
+    private void Next() =>
+        Navigate(Query, WorkMode, EmploymentType, Location, SalaryMin is >= 0 ? SalaryMin : null, ActiveSort,
+            CurrentOffset + PageSize);
+
+    private void Navigate(
+        string? q,
+        string? workMode,
+        string? employmentType,
+        string? location,
+        decimal? salaryMin,
+        string? sort,
+        int newOffset)
     {
-        offset += PageSize;
-        await LoadAsync();
+        var queryParts = BuildFilterQueryParts(q, workMode, employmentType, location, salaryMin, sort);
+
+        if (newOffset > 0)
+            queryParts.Add($"offset={newOffset}");
+
+        var targetUrl = queryParts.Count == 0 ? "/" : "/?" + string.Join("&", queryParts);
+        Navigation.NavigateTo(targetUrl);
+    }
+
+    private string BuildApiUrl()
+    {
+        var queryParts = new List<string>
+        {
+            $"offset={CurrentOffset}",
+            $"limit={PageSize}"
+        };
+
+        queryParts.AddRange(BuildFilterQueryParts(
+            Query, WorkMode, EmploymentType, Location, SalaryMin is >= 0 ? SalaryMin : null, ActiveSort));
+
+        return "api/jobs?" + string.Join("&", queryParts);
+    }
+
+    private static List<string> BuildFilterQueryParts(
+        string? q,
+        string? workMode,
+        string? employmentType,
+        string? location,
+        decimal? salaryMin,
+        string? sort)
+    {
+        var parts = new List<string>();
+
+        if (!string.IsNullOrWhiteSpace(q))
+            parts.Add($"q={Uri.EscapeDataString(q.Trim())}");
+
+        if (!string.IsNullOrWhiteSpace(workMode))
+            parts.Add($"workMode={Uri.EscapeDataString(workMode.Trim())}");
+
+        if (!string.IsNullOrWhiteSpace(employmentType))
+            parts.Add($"employmentType={Uri.EscapeDataString(employmentType.Trim())}");
+
+        if (!string.IsNullOrWhiteSpace(location))
+            parts.Add($"location={Uri.EscapeDataString(location.Trim())}");
+
+        if (salaryMin is >= 0)
+            parts.Add($"salaryMin={salaryMin.Value.ToString(CultureInfo.InvariantCulture)}");
+
+        if (!string.IsNullOrWhiteSpace(sort) && sort != JobOfferSortOptions.Newest)
+            parts.Add($"sort={Uri.EscapeDataString(sort)}");
+
+        return parts;
     }
 }

@@ -51,10 +51,6 @@ flowchart TD
 
 | Metoda a cesta | Přístup | Výsledek |
 | --- | --- | --- |
-## Rozhraní API
-
-| Metoda a cesta | Přístup | Výsledek |
-| --- | --- | --- |
 | `POST /api/auth/register` | Veřejný | `201` + JWT; duplicitní e-mail `409` |
 | `POST /api/auth/login` | Veřejný | `200` + JWT; nesprávné údaje `401` |
 | `GET /api/auth/me` | JWT | Aktivní vlastní účet; jinak `401` |
@@ -62,7 +58,7 @@ flowchart TD
 | `PUT /api/profiles/me` | Aktivní účet `candidate` | Aktualizace základních údajů a dovedností v profilu; `200` |
 | `POST /api/profiles/me/experiences` | Aktivní účet `candidate` | Přidání nové pracovní zkušenosti; `201` |
 | `PUT /api/profiles/me/experiences/{id}` | Aktivní účet `candidate` | Úprava pracovní zkušenosti; neexistující `404` |
-| `DELETE /api/profiles/me/experiences/{id}`| Aktivní účet `candidate` | Smazání pracovní zkušenosti; `204`, neexistující `404` |
+| `DELETE /api/profiles/me/experiences/{id}` | Aktivní účet `candidate` | Smazání pracovní zkušenosti; `204`, neexistující `404` |
 | `POST /api/profiles/me/education` | Aktivní účet `candidate` | Přidání záznamu o vzdělání; `201` |
 | `PUT /api/profiles/me/education/{id}` | Aktivní účet `candidate` | Úprava záznamu o vzdělání; neexistující `404` |
 | `DELETE /api/profiles/me/education/{id}` | Aktivní účet `candidate` | Smazání záznamu o vzdělání; `204`, neexistující `404` |
@@ -98,7 +94,7 @@ flowchart TD
 | `POST /api/companies/{companyId}/members` | Aktivní `owner` nebo `admin` | Přidání existujícího aktivního firemního účtu nebo obnovení členství; `201`, duplicita `409` |
 | `PATCH /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Změna role HR na `admin` či `recruiter`; `200` |
 | `DELETE /api/companies/{companyId}/members/{memberId}` | Aktivní `owner` nebo `admin` | Deaktivace HR členství se zachováním vazeb; `204` |
-| `GET /api/jobs?offset=0&limit=20` | Veřejný | Zveřejněné nabídky s neuplynulým nebo neurčeným deadlinem |
+| `GET /api/jobs?offset=0&limit=20&q=&workMode=&employmentType=&location=&salaryMin=&sort=newest` | Veřejný | Zveřejněné nabídky s neuplynulým nebo neurčeným deadlinem; volitelné fulltextové vyhledávání (`q`), filtry (`workMode`, `employmentType`, `location`, `salaryMin`) a řazení (`newest`, `salary_desc`, `deadline_asc`) |
 | `GET /api/jobs/{jobId}` | Veřejný | Detail dostupné nabídky s údaji firmy; ostatní stavy, uplynulý deadline či neexistující ID `404` |
 | `/hubs/chat` (SignalR) | JWT | WebSocket připojení; zprávy se připravují |
 | `GET /health/live` | Veřejný | Běh procesu API |
@@ -107,7 +103,7 @@ flowchart TD
 | `GET /swagger` | Jen Development | Swagger UI |
 
 - JSON: `camelCase`; validační a aplikační chyby: Problem Details (`application/problem+json`).
-- Nabídky: `offset ≥ 0`, `limit 1–100`; neplatné hodnoty → `400`.
+- Nabídky: `offset ≥ 0`, `limit 1–100`, `salaryMin ≥ 0`, `workMode` (`onsite`/`hybrid`/`remote`), `employmentType` (`full_time`/`part_time`/`contract`/`internship`), `sort` (`newest`/`salary_desc`/`deadline_asc`); neplatné hodnoty → `400`.
 - Datové modely kontraktů: [AuthContracts.cs](../src/Portal.Contracts/Auth/AuthContracts.cs), [CompanyContracts.cs](../src/Portal.Contracts/Companies/CompanyContracts.cs), [JobOfferContracts.cs](../src/Portal.Contracts/Jobs/JobOfferContracts.cs).
 
 ## Přihlášení a oprávnění
