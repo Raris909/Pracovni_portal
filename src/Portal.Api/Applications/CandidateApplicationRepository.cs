@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Npgsql;
+using NpgsqlTypes;
 using Portal.Contracts.Applications;
 
 namespace Portal.Api.Applications;
@@ -66,7 +67,7 @@ public sealed class CandidateApplicationRepository : ICandidateApplicationReposi
         await using var connection = await _dataSource.OpenConnectionAsync(cancellationToken);
         await using var cmd = new NpgsqlCommand(sql, connection);
         cmd.Parameters.AddWithValue("CandidateId", candidateId);
-        cmd.Parameters.AddWithValue("StatusFilter", (object?)statusFilter ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("StatusFilter", NpgsqlDbType.Text, (object?)statusFilter ?? DBNull.Value);
 
         await using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))

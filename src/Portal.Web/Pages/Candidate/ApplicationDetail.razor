@@ -1,0 +1,286 @@
+@page "/applications/{ApplicationId:guid}"
+@using System.Net
+@using System.Text.Json
+@using Portal.Contracts.Applications
+@using Portal.Contracts.Auth
+@using Portal.Contracts.Recruitment
+@using Portal.Web.Services
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>@(application?.JobTitle ?? "Detail přihlášky")</PageTitle>
+
+<p><a class="btn-secondary" href="applications">← Zpět na moje přihlášky</a></p>
+
+@if (loading)
+{
+    <p>Načítání detailu přihlášky…</p>
+}
+else if (notFound)
+{
+    <p role="alert">Přihláška nebyla nalezena.</p>
+}
+else if (error is not null)
+{
+    <p role="alert">@error</p>
+}
+else if (application is not null)
+{
+    <article>
+        <div class="detail-header">
+            <h1>@application.JobTitle</h1>
+            <span class="@ApplicationDisplayHelpers.GetApplicationStatusBadgeClass(application.Status)">
+                @ApplicationDisplayHelpers.GetApplicationStatusLabel(application.Status)
+            </span>
+        </div>
+
+        <p>
+            <strong>@application.CompanyName</strong>
+            · @JobDisplayHelpers.GetWorkModeLabel(application.WorkMode)
+            · @JobDisplayHelpers.GetEmploymentTypeLabel(application.EmploymentType)
+            @if (!string.IsNullOrWhiteSpace(application.Location))
+            {
+                <span> · @application.Location</span>
+            }
+        </p>
+
+        <ul>
+            <li><strong>Odesláno:</strong> @application.SubmittedAt.ToLocalTime().ToString("d. M. yyyy HH:mm")</li>
+            <li><strong>Poslední aktualizace:</strong> @application.UpdatedAt.ToLocalTime().ToString("d. M. yyyy HH:mm")</li>
+        </ul>
+
+        <div class="actions">
+            <a class="btn-secondary" href="@($"jobs/{application.JobOfferId}")">Zobrazit pracovní nabídku</a>
+        </div>
+    </article>
+
+    <article>
+        <h2>Průběh přijímacího řízení</h2>
+
+        @if (application.Stages.Count == 0)
+        {
+            <p class="muted-text">Firma u této pozice zatím nedefinovala jednotlivá kola přijímacího řízení.</p>
+        }
+        else
+        {
+            <div class="stage-list">
+                @foreach (var stage in application.Stages.OrderBy(s => s.Position))
+                {
+                    <div class="stage-card">
+                        <div class="stage-header">
+                            <div>
+                                <strong>@stage.Position. @stage.Name</strong>
+                                <span class="muted-text"> (@ApplicationDisplayHelpers.GetStageKindLabel(stage.Kind))</span>
+                            </div>
+                            <span class="@ApplicationDisplayHelpers.GetStageStatusBadgeClass(stage.Status)">
+                                @ApplicationDisplayHelpers.GetStageStatusLabel(stage.Status)
+                            </span>
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(stage.Description))
+                        {
+                            <p>@stage.Description</p>
+                        }
+
+                        @if (stage.StartedAt.HasValue || stage.CompletedAt.HasValue)
+                        {
+                            <p class="muted-text">
+                                @if (stage.StartedAt.HasValue)
+                                {
+                                    <span>Zahájeno: @stage.StartedAt.Value.ToLocalTime().ToString("d. M. yyyy HH:mm")</span>
+                                }
+                                @if (stage.CompletedAt.HasValue)
+                                {
+                                    <span> · Dokončeno: @stage.CompletedAt.Value.ToLocalTime().ToString("d. M. yyyy HH:mm")</span>
+                                }
+                            </p>
+                        }
+
+                        @if (stage.Kind == RecruitmentStageKinds.Interview)
+                        {
+                            <InterviewBookingSection ApplicationId="application.Id"
+                                                     Stage="stage"
+                                                     ApplicationStatus="application.Status" />
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </article>
+
+    @if (!string.IsNullOrWhiteSpace(application.CoverMessage))
+    {
+        <article>
+            <h2>Průvodní zpráva</h2>
+            <p style="white-space: pre-line;">@application.CoverMessage</p>
+        </article>
+    }
+
+    <article>
+        <h2>Přiložené dokumenty</h2>
+        @if (application.AttachedDocuments.Count == 0)
+        {
+            <p class="muted-text">K této přihlášce nebyly přiloženy žádné dokumenty.</p>
+        }
+        else
+        {
+            <table>
+                <thead>
+                    <tr>
+                        <th>Název souboru</th>
+                        <th>Typ</th>
+                        <th>Velikost</th>
+                        <th>Přiloženo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var doc in application.AttachedDocuments)
+                    {
+                        <tr>
+                            <td><strong>@doc.OriginalFilename</strong></td>
+                            <td>@ApplicationDisplayHelpers.GetDocumentKindLabel(doc.Kind)</td>
+                            <td>@ApplicationDisplayHelpers.FormatFileSize(doc.SizeBytes)</td>
+                            <td>@doc.AttachedAt.ToLocalTime().ToString("d. M. yyyy HH:mm")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
+    </article>
+
+    <article>
+        <h2>Odeslaný snímek profilu</h2>
+        <p class="muted-text">Tyto údaje byly firmě zpřístupněny v okamžiku odeslání přihlášky.</p>
+
+        <dl>
+            <dt>Jméno a příjmení</dt>
+            <dd>@application.ProfileSnapshot.FirstName @application.ProfileSnapshot.LastName</dd>
+
+            <dt>E-mail</dt>
+            <dd>@application.ProfileSnapshot.Email</dd>
+
+            @if (!string.IsNullOrWhiteSpace(application.ProfileSnapshot.Phone))
+            {
+                <dt>Telefon</dt>
+                <dd>@application.ProfileSnapshot.Phone</dd>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(application.ProfileSnapshot.Headline))
+            {
+                <dt>Profesní titulek</dt>
+                <dd>@application.ProfileSnapshot.Headline</dd>
+            }
+
+            @if (!string.IsNullOrWhiteSpace(application.ProfileSnapshot.City) || !string.IsNullOrWhiteSpace(application.ProfileSnapshot.CountryCode))
+            {
+                <dt>Lokalita</dt>
+                <dd>@string.Join(", ", new[] { application.ProfileSnapshot.City, application.ProfileSnapshot.CountryCode }.Where(x => !string.IsNullOrWhiteSpace(x)))</dd>
+            }
+        </dl>
+
+        @if (!string.IsNullOrWhiteSpace(application.ProfileSnapshot.Summary))
+        {
+            <h3>Shrnutí</h3>
+            <p style="white-space: pre-line;">@application.ProfileSnapshot.Summary</p>
+        }
+
+        @if (application.ProfileSnapshot.Skills.Count > 0)
+        {
+            <h3>Dovednosti</h3>
+            <div class="skill-tags">
+                @foreach (var skill in application.ProfileSnapshot.Skills)
+                {
+                    <span class="badge badge-info">@skill</span>
+                }
+            </div>
+        }
+
+        @if (application.ProfileSnapshot.Experiences.Count > 0)
+        {
+            <h3>Pracovní zkušenosti</h3>
+            <ul>
+                @foreach (var exp in application.ProfileSnapshot.Experiences)
+                {
+                    <li>
+                        <strong>@exp.Position</strong> – @exp.Employer
+                        (@exp.StartDate.ToString("MM/yyyy") – @(exp.EndDate?.ToString("MM/yyyy") ?? "současnost"))
+                        @if (!string.IsNullOrWhiteSpace(exp.Description))
+                        {
+                            <p style="white-space: pre-line;">@exp.Description</p>
+                        }
+                    </li>
+                }
+            </ul>
+        }
+
+        @if (application.ProfileSnapshot.Education.Count > 0)
+        {
+            <h3>Vzdělání</h3>
+            <ul>
+                @foreach (var edu in application.ProfileSnapshot.Education)
+                {
+                    <li>
+                        <strong>@edu.School</strong>
+                        @if (!string.IsNullOrWhiteSpace(edu.Degree) || !string.IsNullOrWhiteSpace(edu.FieldOfStudy))
+                        {
+                            <span> – @string.Join(", ", new[] { edu.Degree, edu.FieldOfStudy }.Where(x => !string.IsNullOrWhiteSpace(x)))</span>
+                        }
+                        (@edu.StartDate.ToString("MM/yyyy") – @(edu.EndDate?.ToString("MM/yyyy") ?? "současnost"))
+                    </li>
+                }
+            </ul>
+        }
+    </article>
+}
+
+@code {
+    [Parameter] public Guid ApplicationId { get; set; }
+
+    private CandidateApplicationDetailResponse? application;
+    private bool loading = true;
+    private bool notFound;
+    private string? error;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (Session.User is null || Session.User.Role != UserRoles.Candidate)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        application = null;
+        loading = true;
+        notFound = false;
+        error = null;
+
+        try
+        {
+            using var response = await Http.GetAsync($"api/applications/{ApplicationId}");
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                Session.Logout();
+                Navigation.NavigateTo("login");
+                return;
+            }
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                notFound = true;
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            application = await response.Content.ReadFromJsonAsync<CandidateApplicationDetailResponse>();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            error = "Detail přihlášky se nepodařilo načíst.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

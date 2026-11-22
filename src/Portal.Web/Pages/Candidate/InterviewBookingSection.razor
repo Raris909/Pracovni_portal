@@ -1,0 +1,266 @@
+@using System.Net
+@using System.Text.Json
+@using Portal.Contracts.Applications
+@using Portal.Contracts.Recruitment
+@using Portal.Web.Services
+@inject HttpClient Http
+
+<div class="interview-section">
+    <h4>Termíny pohovoru</h4>
+
+    @if (loading)
+    {
+        <p>Načítání termínů pohovoru…</p>
+    }
+    else if (notAssigned)
+    {
+        <p class="muted-text">Toto kolo pohovoru zatím nebylo přiřazeno k vaší přihlášce. Termíny budou dostupné po zařazení HR.</p>
+    }
+    else
+    {
+        @if (error is not null)
+        {
+            <p role="alert">@error</p>
+        }
+        @if (successMessage is not null)
+        {
+            <p role="status" class="status-success-text">@successMessage</p>
+        }
+
+        @if (ActiveBooking is { } active)
+        {
+            <div class="booking-card">
+                <div class="booking-header">
+                    <strong>Váš rezervovaný termín</strong>
+                    <span class="@ApplicationDisplayHelpers.GetBookingStatusBadgeClass(active.Status)">
+                        @ApplicationDisplayHelpers.GetBookingStatusLabel(active.Status)
+                    </span>
+                </div>
+                <p>
+                    <strong>Datum a čas:</strong>
+                    @active.StartsAt.ToLocalTime().ToString("d. M. yyyy HH:mm") – @active.EndsAt.ToLocalTime().ToString("HH:mm")
+                </p>
+                @if (!string.IsNullOrWhiteSpace(active.Location))
+                {
+                    <p><strong>Místo:</strong> @active.Location</p>
+                }
+                @if (!string.IsNullOrWhiteSpace(active.MeetingUrl))
+                {
+                    <p>
+                        <strong>Odkaz na schůzku:</strong>
+                        @if (JobDisplayHelpers.TryGetSafeHttpUrl(active.MeetingUrl, out var safeUrl))
+                        {
+                            <a href="@safeUrl" target="_blank" rel="noopener noreferrer">@active.MeetingUrl</a>
+                        }
+                        else
+                        {
+                            <span>@active.MeetingUrl</span>
+                        }
+                    </p>
+                }
+
+                @if (CanCancel(active))
+                {
+                    <div class="actions">
+                        <button type="button" class="btn-danger" disabled="@busy" @onclick="() => CancelBookingAsync(active.Id)">
+                            @(busy ? "Ruším…" : "Zrušit rezervaci")
+                        </button>
+                    </div>
+                }
+            </div>
+        }
+        else if (CanBookNewSlot)
+        {
+            @if (availableSlots is null || availableSlots.Count == 0)
+            {
+                <p class="muted-text">Momentálně nejsou vypsány žádné volné termíny pro toto kolo.</p>
+            }
+            else
+            {
+                <p>Vyberte si jeden z dostupných termínů:</p>
+                <div class="slot-list">
+                    @foreach (var slot in availableSlots)
+                    {
+                        <div class="slot-item">
+                            <div>
+                                <strong>@slot.StartsAt.ToLocalTime().ToString("d. M. yyyy HH:mm") – @slot.EndsAt.ToLocalTime().ToString("HH:mm")</strong>
+                                @if (!string.IsNullOrWhiteSpace(slot.Location))
+                                {
+                                    <div>Lokalita: @slot.Location</div>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(slot.MeetingUrl))
+                                {
+                                    <div>Online pohovor</div>
+                                }
+                            </div>
+                            <button type="button" disabled="@busy" @onclick="() => BookSlotAsync(slot.Id)">
+                                @(busy ? "Rezervuji…" : "Rezervovat")
+                            </button>
+                        </div>
+                    }
+                </div>
+            }
+        }
+        else
+        {
+            <p class="muted-text">Pro toto kolo již nelze rezervovat nový termín.</p>
+        }
+
+        @if (CancelledBookings.Count > 0)
+        {
+            <details class="history-details">
+                <summary>Historie zrušených rezervací (@CancelledBookings.Count)</summary>
+                <ul>
+                    @foreach (var item in CancelledBookings)
+                    {
+                        <li>
+                            @item.StartsAt.ToLocalTime().ToString("d. M. yyyy HH:mm") – @item.EndsAt.ToLocalTime().ToString("HH:mm")
+                            (zrušeno @(item.CancelledAt?.ToLocalTime().ToString("d. M. yyyy HH:mm") ?? "—"))
+                        </li>
+                    }
+                </ul>
+            </details>
+        }
+    }
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Guid ApplicationId { get; set; }
+    [Parameter, EditorRequired] public CandidateApplicationStageProgressResponse Stage { get; set; } = default!;
+    [Parameter, EditorRequired] public string ApplicationStatus { get; set; } = "";
+
+    private List<InterviewSlotResponse>? availableSlots;
+    private List<InterviewBookingResponse>? bookings;
+    private bool loading = true;
+    private bool notAssigned;
+    private bool busy;
+    private string? error;
+    private string? successMessage;
+
+    private string BasePath => $"api/applications/{ApplicationId}/stages/{Stage.StageId}";
+
+    private InterviewBookingResponse? ActiveBooking =>
+        bookings?.FirstOrDefault(b => b.Status != InterviewBookingStatuses.Cancelled);
+
+    private List<InterviewBookingResponse> CancelledBookings =>
+        bookings?.Where(b => b.Status == InterviewBookingStatuses.Cancelled).ToList() ?? [];
+
+    private bool CanBookNewSlot =>
+        ApplicationStatus is ApplicationStatuses.Submitted or ApplicationStatuses.InProgress
+        && Stage.Status is ApplicationStageStatuses.Pending or ApplicationStageStatuses.InProgress;
+
+    private static bool CanCancel(InterviewBookingResponse booking) =>
+        booking.Status == InterviewBookingStatuses.Confirmed
+        && booking.StartsAt > DateTimeOffset.UtcNow;
+
+    protected override Task OnParametersSetAsync() => LoadDataAsync();
+
+    private async Task LoadDataAsync()
+    {
+        loading = true;
+        notAssigned = false;
+        error = null;
+
+        try
+        {
+            using var bookingsResponse = await Http.GetAsync($"{BasePath}/bookings");
+            if (bookingsResponse.StatusCode == HttpStatusCode.NotFound)
+            {
+                notAssigned = true;
+                return;
+            }
+
+            bookingsResponse.EnsureSuccessStatusCode();
+            bookings = await bookingsResponse.Content.ReadFromJsonAsync<List<InterviewBookingResponse>>() ?? [];
+
+            using var slotsResponse = await Http.GetAsync($"{BasePath}/slots");
+            if (slotsResponse.IsSuccessStatusCode)
+            {
+                availableSlots = await slotsResponse.Content.ReadFromJsonAsync<List<InterviewSlotResponse>>() ?? [];
+            }
+            else
+            {
+                availableSlots = [];
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            error = "Nepodařilo se načíst termíny pohovoru.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private async Task BookSlotAsync(Guid slotId)
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.PostAsJsonAsync(
+                $"{BasePath}/bookings",
+                new CreateInterviewBookingRequest(slotId));
+
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Termín pohovoru byl úspěšně rezervován.";
+                await LoadDataAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Tento termín již není dostupný nebo se překrývá s jiným vaším pohovorem.";
+                await LoadDataAsync();
+            }
+            else
+            {
+                error = "Rezervaci termínu se nepodařilo dokončit.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task CancelBookingAsync(Guid bookingId)
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.DeleteAsync($"{BasePath}/bookings/{bookingId}");
+            if (response.IsSuccessStatusCode)
+            {
+                successMessage = "Rezervace byla zrušena. Můžete si vybrat jiný dostupný termín.";
+                await LoadDataAsync();
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                error = "Tuto rezervaci již nelze zrušit (termín již začal nebo byl uzavřen).";
+                await LoadDataAsync();
+            }
+            else
+            {
+                error = "Zrušení rezervace se nezdařilo.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}
