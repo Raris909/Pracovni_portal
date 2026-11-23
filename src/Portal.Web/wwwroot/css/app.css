@@ -185,6 +185,36 @@ form .actions button {
     stroke-width: 6;
 }
 
+form.search-panel {
+    max-width: none;
+    background: white;
+    border: 1px solid #d6dfe4;
+    border-radius: .5rem;
+    padding: 1rem;
+    margin: 1rem 0 1.5rem;
+    gap: .85rem;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: .75rem;
+}
+
+    .filter-grid > div {
+        display: grid;
+        gap: .3rem;
+    }
+
+button.btn-secondary {
+    background: white;
+    color: #172b36;
+    border: 1px solid #879ba7;
+}
+
+    button.btn-secondary:hover:not(:disabled) {
+        background: #eef3f6;
+    }
 .filter-bar {
     display: flex;
     gap: .75rem;

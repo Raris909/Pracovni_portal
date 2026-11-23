@@ -13,18 +13,68 @@ public sealed class JobOfferRepository(NpgsqlDataSource database) : IJobOfferRep
         status, published_at, application_deadline, created_at, updated_at
         """;
 
-    public async Task<IReadOnlyList<JobOfferResponse>> GetPublishedJobsAsync(int limit, int offset, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<JobOfferResponse>> GetPublishedJobsAsync(
+        JobOfferSearchQuery query, CancellationToken cancellationToken)
     {
-        await using var command = database.CreateCommand("""
+        var conditions = new List<string>
+        {
+            "j.status = 'published'",
+            "(j.application_deadline IS NULL OR j.application_deadline > now())"
+        };
+
+        await using var connection = await database.OpenConnectionAsync(cancellationToken);
+        await using var command = new NpgsqlCommand { Connection = connection };
+
+        if (!string.IsNullOrWhiteSpace(query.Query))
+        {
+            conditions.Add("""
+                to_tsvector('simple', j.title || ' ' || j.description || ' ' || j.requirements)
+                    @@ plainto_tsquery('simple', @q)
+                """);
+            command.Parameters.AddWithValue("q", NpgsqlDbType.Text, query.Query);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.WorkMode))
+        {
+            conditions.Add("j.work_mode = @workMode");
+            command.Parameters.AddWithValue("workMode", NpgsqlDbType.Text, query.WorkMode);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.EmploymentType))
+        {
+            conditions.Add("j.employment_type = @employmentType");
+            command.Parameters.AddWithValue("employmentType", NpgsqlDbType.Text, query.EmploymentType);
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Location))
+        {
+            conditions.Add(@"j.location ILIKE @location ESCAPE '\'");
+            command.Parameters.AddWithValue("location", NpgsqlDbType.Text, $"%{EscapeLikePattern(query.Location)}%");
+        }
+
+        if (query.SalaryMin.HasValue)
+        {
+            conditions.Add("COALESCE(j.salary_max, j.salary_min) >= @salaryMin");
+            command.Parameters.AddWithValue("salaryMin", NpgsqlDbType.Numeric, query.SalaryMin.Value);
+        }
+
+        var orderBy = query.Sort switch
+        {
+            JobOfferSortOptions.SalaryDesc => "COALESCE(j.salary_max, j.salary_min) DESC NULLS LAST, j.published_at DESC, j.id",
+            JobOfferSortOptions.DeadlineAsc => "j.application_deadline ASC NULLS LAST, j.published_at DESC, j.id",
+            _ => "j.published_at DESC, j.id"
+        };
+
+        command.CommandText = $"""
             SELECT j.id, j.title, c.name, j.location, j.work_mode
-            FROM portal.job_offers j JOIN portal.companies c ON c.id = j.company_id
-            WHERE j.status = 'published'
-              AND (j.application_deadline IS NULL OR j.application_deadline > now())
-            ORDER BY j.published_at DESC, j.id
-            LIMIT $1 OFFSET $2
-            """);
-        command.Parameters.AddWithValue(limit);
-        command.Parameters.AddWithValue(offset);
+            FROM portal.job_offers j
+            JOIN portal.companies c ON c.id = j.company_id
+            WHERE {string.Join(" AND ", conditions)}
+            ORDER BY {orderBy}
+            LIMIT @limit OFFSET @offset
+            """;
+        command.Parameters.AddWithValue("limit", query.Limit);
+        command.Parameters.AddWithValue("offset", query.Offset);
 
         var jobs = new List<JobOfferResponse>();
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
@@ -35,6 +85,9 @@ public sealed class JobOfferRepository(NpgsqlDataSource database) : IJobOfferRep
         }
         return jobs;
     }
+
+    private static string EscapeLikePattern(string value) =>
+        value.Replace(@"\", @"\\").Replace("%", @"\%").Replace("_", @"\_");
 
     public async Task<JobOfferDetailResponse?> GetPublishedJobByIdAsync(Guid jobId, CancellationToken cancellationToken)
     {
