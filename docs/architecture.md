@@ -51,10 +51,6 @@ flowchart TD
 
 | Metoda a cesta | Přístup | Výsledek |
 | --- | --- | --- |
-## Rozhraní API
-
-| Metoda a cesta | Přístup | Výsledek |
-| --- | --- | --- |
 | `POST /api/auth/register` | Veřejný | `201` + JWT; duplicitní e-mail `409` |
 | `POST /api/auth/login` | Veřejný | `200` + JWT; nesprávné údaje `401` |
 | `GET /api/auth/me` | JWT | Aktivní vlastní účet; jinak `401` |

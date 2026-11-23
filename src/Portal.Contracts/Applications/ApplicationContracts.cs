@@ -132,7 +132,7 @@ public sealed record CompanyApplicationDetailResponse(
 /// Company members can transition applications to <c>in_progress</c>, <c>accepted</c>, or <c>rejected</c>.
 /// </summary>
 public sealed record UpdateCompanyApplicationStatusRequest(
-    [property: System.ComponentModel.DataAnnotations.Required] string Status) : System.ComponentModel.DataAnnotations.IValidatableObject
+    [System.ComponentModel.DataAnnotations.Required] string Status) : System.ComponentModel.DataAnnotations.IValidatableObject
 {
     private static readonly IReadOnlySet<string> AllowedCompanyStatuses = new HashSet<string>
     {

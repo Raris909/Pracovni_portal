@@ -28,7 +28,7 @@ public sealed record CandidateDocumentResponse(
     DateTimeOffset CreatedAt);
 
 public sealed record SetCurrentCvRequest(
-    [property: Required] Guid DocumentId) : IValidatableObject
+    [Required] Guid DocumentId) : IValidatableObject
 {
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
