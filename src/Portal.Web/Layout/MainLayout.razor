@@ -15,6 +15,10 @@
                 <NavLink href="company/team">HR Tým</NavLink>
                 <NavLink href="company/profile">Profil firmy</NavLink>
             }
+            else if (user.Role == UserRoles.Candidate)
+            {
+                <NavLink href="applications">Moje přihlášky</NavLink>
+            }
 
             <NavLink href="account">Můj účet</NavLink>
             <span>@user.FirstName @user.LastName</span>
