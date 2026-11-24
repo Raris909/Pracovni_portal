@@ -27,7 +27,8 @@ public sealed record CandidateDocumentResponse(
     bool IsCurrentCv,
     DateTimeOffset CreatedAt);
 
-public sealed class SetCurrentCvRequest : IValidatableObject
+public sealed record SetCurrentCvRequest(
+    [Required] Guid DocumentId) : IValidatableObject
 {
     [Required]
     public Guid DocumentId { get; set; }

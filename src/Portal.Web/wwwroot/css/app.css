@@ -184,3 +184,159 @@ form .actions button {
     stroke: #125b91;
     stroke-width: 6;
 }
+
+form.search-panel {
+    max-width: none;
+    background: white;
+    border: 1px solid #d6dfe4;
+    border-radius: .5rem;
+    padding: 1rem;
+    margin: 1rem 0 1.5rem;
+    gap: .85rem;
+}
+
+.filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: .75rem;
+}
+
+    .filter-grid > div {
+        display: grid;
+        gap: .3rem;
+    }
+
+button.btn-secondary {
+    background: white;
+    color: #172b36;
+    border: 1px solid #879ba7;
+}
+
+    button.btn-secondary:hover:not(:disabled) {
+        background: #eef3f6;
+    }
+.filter-bar {
+    display: flex;
+    gap: .75rem;
+    align-items: center;
+    margin-bottom: 1rem;
+    flex-wrap: wrap;
+}
+
+.detail-header,
+.stage-header,
+.booking-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.badge {
+    display: inline-block;
+    padding: .2rem .55rem;
+    border-radius: 999px;
+    font-size: .85rem;
+    font-weight: 600;
+    background: #eef3f6;
+    color: #172b36;
+}
+
+.badge-info {
+    background: #e3f1fb;
+    color: #0e4a75;
+}
+
+.badge-success {
+    background: #e1f5e8;
+    color: #156534;
+}
+
+.badge-warning {
+    background: #fff3d6;
+    color: #8a5600;
+}
+
+.badge-danger {
+    background: #fde8e8;
+    color: #a31515;
+}
+
+.badge-muted {
+    background: #ebeff2;
+    color: #4f636e;
+}
+
+.muted-text {
+    color: #546975;
+}
+
+.status-success-text {
+    color: #156534;
+    font-weight: 600;
+}
+
+.stage-list,
+.slot-list,
+.checkbox-list {
+    display: grid;
+    gap: .85rem;
+    margin-top: .75rem;
+}
+
+.stage-card {
+    border: 1px solid #d6dfe4;
+    border-radius: .4rem;
+    padding: 1rem;
+    background: #fafcfd;
+}
+
+.interview-section {
+    margin-top: 1rem;
+    padding-top: .75rem;
+    border-top: 1px dashed #c7d4dc;
+}
+
+.booking-card {
+    background: white;
+    border: 1px solid #b9d7ea;
+    border-radius: .4rem;
+    padding: .85rem 1rem;
+    margin-top: .5rem;
+}
+
+.slot-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: .75rem 1rem;
+    background: white;
+    border: 1px solid #d6dfe4;
+    border-radius: .4rem;
+    flex-wrap: wrap;
+}
+
+.checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    cursor: pointer;
+}
+
+.skill-tags {
+    display: flex;
+    gap: .4rem;
+    flex-wrap: wrap;
+    margin: .5rem 0 1rem;
+}
+
+.history-details {
+    margin-top: .75rem;
+}
+
+button.btn-danger {
+    background: #a31515;
+    border-color: #a31515;
+}

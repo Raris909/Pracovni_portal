@@ -1,0 +1,163 @@
+@page "/applications"
+@using System.Net
+@using System.Text.Json
+@using Portal.Contracts.Applications
+@using Portal.Contracts.Auth
+@using Portal.Web.Services
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Moje přihlášky</PageTitle>
+
+<h1>Moje přihlášky</h1>
+
+@if (loading)
+{
+    <p>Načítání přihlášek…</p>
+}
+else
+{
+    <div class="filter-bar">
+        <label for="status-filter">Filtrovat podle stavu:</label>
+        <select id="status-filter" value="@selectedStatus" @onchange="OnStatusChanged" disabled="@loading">
+            <option value="">Všechny stavy</option>
+            <option value="@ApplicationStatuses.Submitted">@ApplicationDisplayHelpers.GetApplicationStatusLabel(ApplicationStatuses.Submitted)</option>
+            <option value="@ApplicationStatuses.InProgress">@ApplicationDisplayHelpers.GetApplicationStatusLabel(ApplicationStatuses.InProgress)</option>
+            <option value="@ApplicationStatuses.Accepted">@ApplicationDisplayHelpers.GetApplicationStatusLabel(ApplicationStatuses.Accepted)</option>
+            <option value="@ApplicationStatuses.Rejected">@ApplicationDisplayHelpers.GetApplicationStatusLabel(ApplicationStatuses.Rejected)</option>
+            <option value="@ApplicationStatuses.Withdrawn">@ApplicationDisplayHelpers.GetApplicationStatusLabel(ApplicationStatuses.Withdrawn)</option>
+        </select>
+    </div>
+
+    @if (error is not null)
+    {
+        <p role="alert">@error</p>
+    }
+    else if (applications is null || applications.Count == 0)
+    {
+        @if (!string.IsNullOrEmpty(selectedStatus))
+        {
+            <p>V tomto stavu nemáte žádné přihlášky.</p>
+        }
+        else
+        {
+            <p>Zatím jste neodeslal/a žádnou přihlášku. Prohlédněte si <a href="">aktuální pracovní nabídky</a>.</p>
+        }
+    }
+    else
+    {
+        <table>
+            <thead>
+                <tr>
+                    <th>Pozice</th>
+                    <th>Firma</th>
+                    <th>Režim / lokalita</th>
+                    <th>Stav přihlášky</th>
+                    <th>Aktuální kolo</th>
+                    <th>Odesláno</th>
+                    <th>Akce</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var app in applications)
+                {
+                    <tr>
+                        <td>
+                            <strong><a href="@($"applications/{app.Id}")">@app.JobTitle</a></strong>
+                        </td>
+                        <td>@app.CompanyName</td>
+                        <td>
+                            @JobDisplayHelpers.GetWorkModeLabel(app.WorkMode)
+                            @if (!string.IsNullOrWhiteSpace(app.Location))
+                            {
+                                <span> · @app.Location</span>
+                            }
+                        </td>
+                        <td>
+                            <span class="@ApplicationDisplayHelpers.GetApplicationStatusBadgeClass(app.Status)">
+                                @ApplicationDisplayHelpers.GetApplicationStatusLabel(app.Status)
+                            </span>
+                        </td>
+                        <td>
+                            @if (!string.IsNullOrWhiteSpace(app.CurrentStageName))
+                            {
+                                <div>@app.CurrentStageName</div>
+                                @if (!string.IsNullOrWhiteSpace(app.CurrentStageStatus))
+                                {
+                                    <small class="@ApplicationDisplayHelpers.GetStageStatusBadgeClass(app.CurrentStageStatus)">
+                                        @ApplicationDisplayHelpers.GetStageStatusLabel(app.CurrentStageStatus)
+                                    </small>
+                                }
+                            }
+                            else
+                            {
+                                <span>—</span>
+                            }
+                        </td>
+                        <td>@app.SubmittedAt.ToLocalTime().ToString("d. M. yyyy")</td>
+                        <td class="actions">
+                            <a class="btn-secondary" href="@($"applications/{app.Id}")">Detail</a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+}
+
+@code {
+    private List<CandidateApplicationSummaryResponse>? applications;
+    private string selectedStatus = "";
+    private bool loading = true;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null || Session.User.Role != UserRoles.Candidate)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        await LoadApplicationsAsync();
+    }
+
+    private async Task OnStatusChanged(ChangeEventArgs e)
+    {
+        selectedStatus = e.Value?.ToString() ?? "";
+        await LoadApplicationsAsync();
+    }
+
+    private async Task LoadApplicationsAsync()
+    {
+        loading = true;
+        error = null;
+
+        try
+        {
+            var url = string.IsNullOrWhiteSpace(selectedStatus)
+                ? "api/applications"
+                : $"api/applications?status={Uri.EscapeDataString(selectedStatus)}";
+
+            using var response = await Http.GetAsync(url);
+            if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                Session.Logout();
+                Navigation.NavigateTo("login");
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+            applications = await response.Content.ReadFromJsonAsync<List<CandidateApplicationSummaryResponse>>();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            error = "Přihlášky se nepodařilo načíst. Zkuste to prosím znovu.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+}

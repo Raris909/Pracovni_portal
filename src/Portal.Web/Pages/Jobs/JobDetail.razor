@@ -1,8 +1,11 @@
 @page "/jobs/{JobId:guid}"
 @using System.Net
 @using System.Text.Json
+@using Portal.Contracts.Auth
 @using Portal.Contracts.Jobs
+@using Portal.Contracts.Profiles
 @using Portal.Web.Services
+@inject Portal.Web.Services.AuthSession Session
 @inject HttpClient Http
 
 <PageTitle>@(job?.Title ?? "Detail pozice")</PageTitle>
@@ -25,86 +28,179 @@ else if (job is not null)
 {
     <article>
         <h1>@job.Title</h1>
-        <p><strong>@job.Company.Name</strong> · @JobDisplayHelpers.GetWorkModeLabel(job.WorkMode) ·
-            @JobDisplayHelpers.GetEmploymentTypeLabel(job.EmploymentType)</p>
+        <p>
+            <strong>@job.Company.Name</strong> · @JobDisplayHelpers.GetWorkModeLabel(job.WorkMode) ·
+            @JobDisplayHelpers.GetEmploymentTypeLabel(job.EmploymentType)
+        </p>
 
-            <ul>
-                @if (!string.IsNullOrWhiteSpace(job.Location))
-                {
-                    <li><strong>Lokalita:</strong> @job.Location</li>
-                }
-                @if (FormatSalary(job) is { } salary)
-                {
-                    <li><strong>Mzda:</strong> @salary</li>
-                }
-                <li><strong>Zveřejněno:</strong> @job.PublishedAt.ToLocalTime().ToString("d. M. yyyy")</li>
-                @if (job.ApplicationDeadline.HasValue)
-                {
-                    <li><strong>Uzávěrka přihlášek:</strong> @job.ApplicationDeadline.Value.ToLocalTime().ToString("d. M. yyyy")
-                    </li>
-                }
-            </ul>
-        </article>
-
-        <article>
-            <h2>Popis pozice</h2>
-            <p style="white-space: pre-line;">@job.Description</p>
-
-            @if (!string.IsNullOrWhiteSpace(job.Requirements))
+        <ul>
+            @if (!string.IsNullOrWhiteSpace(job.Location))
             {
-                <h2>Požadavky</h2>
-                <p style="white-space: pre-line;">@job.Requirements</p>
+                <li><strong>Lokalita:</strong> @job.Location</li>
             }
-        </article>
-
-        <article>
-            <h2>O společnosti @job.Company.Name</h2>
-            @if (!string.IsNullOrWhiteSpace(job.Company.Description))
+            @if (FormatSalary(job) is { } salary)
             {
-                <p style="white-space: pre-line;">@job.Company.Description</p>
+                <li><strong>Mzda:</strong> @salary</li>
             }
-            <ul>
-                <li><strong>Země:</strong> @job.Company.CountryCode</li>
-                @if (!string.IsNullOrWhiteSpace(job.Company.RegistrationNumber))
-                {
-                    <li><strong>IČO / Reg. číslo:</strong> @job.Company.RegistrationNumber</li>
-                }
-                @if (!string.IsNullOrWhiteSpace(job.Company.Address))
-                {
-                    <li><strong>Adresa:</strong> @job.Company.Address</li>
-                }
-                @if (!string.IsNullOrWhiteSpace(job.Company.WebsiteUrl))
-                {
-                    <li>
-                        <strong>Web:</strong>
-                        @if (JobDisplayHelpers.TryGetSafeHttpUrl(job.Company.WebsiteUrl, out var safeUrl))
-                        {
-                            <a href="@safeUrl" target="_blank" rel="noopener noreferrer">@job.Company.WebsiteUrl</a>
-                        }
-                        else
-                        {
-                            <span>@job.Company.WebsiteUrl</span>
-                        }
-                    </li>
-                }
-            </ul>
-        </article>
-    }
+            <li><strong>Zveřejněno:</strong> @job.PublishedAt.ToLocalTime().ToString("d. M. yyyy")</li>
+            @if (job.ApplicationDeadline.HasValue)
+            {
+                <li><strong>Uzávěrka přihlášek:</strong> @job.ApplicationDeadline.Value.ToLocalTime().ToString("d. M. yyyy")</li>
+            }
+        </ul>
+    </article>
+
+    <article>
+        <h2>Popis pozice</h2>
+        <p style="white-space: pre-line;">@job.Description</p>
+
+        @if (!string.IsNullOrWhiteSpace(job.Requirements))
+        {
+            <h2>Požadavky</h2>
+            <p style="white-space: pre-line;">@job.Requirements</p>
+        }
+    </article>
+
+    <article>
+        <h2>O společnosti @job.Company.Name</h2>
+        @if (!string.IsNullOrWhiteSpace(job.Company.Description))
+        {
+            <p style="white-space: pre-line;">@job.Company.Description</p>
+        }
+        <ul>
+            <li><strong>Země:</strong> @job.Company.CountryCode</li>
+            @if (!string.IsNullOrWhiteSpace(job.Company.RegistrationNumber))
+            {
+                <li><strong>IČO / Reg. číslo:</strong> @job.Company.RegistrationNumber</li>
+            }
+            @if (!string.IsNullOrWhiteSpace(job.Company.Address))
+            {
+                <li><strong>Adresa:</strong> @job.Company.Address</li>
+            }
+            @if (!string.IsNullOrWhiteSpace(job.Company.WebsiteUrl))
+            {
+                <li>
+                    <strong>Web:</strong>
+                    @if (JobDisplayHelpers.TryGetSafeHttpUrl(job.Company.WebsiteUrl, out var safeUrl))
+                    {
+                        <a href="@safeUrl" target="_blank" rel="noopener noreferrer">@job.Company.WebsiteUrl</a>
+                    }
+                    else
+                    {
+                        <span>@job.Company.WebsiteUrl</span>
+                    }
+                </li>
+            }
+        </ul>
+    </article>
+
+    <article>
+        <h2>Přihlásit se na pozici</h2>
+
+        @if (Session.User is null)
+        {
+            <p>Pro odeslání přihlášky se prosím <a href="login">přihlaste</a> nebo si <a href="register">vytvořte účet uchazeče</a>.</p>
+        }
+        else if (Session.User.Role != UserRoles.Candidate)
+        {
+            <p class="muted-text">Na pracovní pozice se mohou hlásit pouze uživatelé s účtem uchazeče o zaměstnání.</p>
+        }
+        else if (submittedApplicationId.HasValue)
+        {
+            <p role="status" class="status-success-text">Vaše přihláška byla úspěšně odeslána.</p>
+            <div class="actions">
+                <a class="btn-secondary" href="@($"applications/{submittedApplicationId.Value}")">Zobrazit detail přihlášky</a>
+                <a class="btn-secondary" href="applications">Přejít na moje přihlášky</a>
+            </div>
+        }
+        else
+        {
+            <p class="muted-text">Při odeslání se k přihlášce automaticky přiloží aktuální snímek vašeho profilu.</p>
+
+            @if (applyError is not null)
+            {
+                <p role="alert">@applyError</p>
+            }
+
+            <form @onsubmit="SubmitApplicationAsync" @onsubmit:preventDefault>
+                <div>
+                    <label for="cover-message">Průvodní zpráva (nepovinné)</label>
+                    <textarea id="cover-message" rows="5" maxlength="5000" @bind="coverMessage"
+                              placeholder="Krátce představte svou motivaci a zkušenosti…"></textarea>
+                </div>
+
+                <fieldset>
+                    <legend>Přiložené dokumenty z vašeho profilu</legend>
+                    <p class="muted-text">Pokud žádný dokument nevyberete, automaticky se přiloží vaše aktuální CV (je-li nastaveno).</p>
+                    @if (loadingDocuments)
+                    {
+                        <p>Načítání nahraných dokumentů…</p>
+                    }
+                    else if (documents is null || documents.Count == 0)
+                    {
+                        <p class="muted-text">Zatím nemáte nahrané žádné CV ani jiné dokumenty. Přihlášku můžete odeslat i bez nich.</p>
+                    }
+                    else
+                    {
+                        <div class="checkbox-list">
+                            @foreach (var doc in documents)
+                            {
+                                var isChecked = selectedDocumentIds.Contains(doc.Id);
+                                <label class="checkbox-item">
+                                    <input type="checkbox"
+                                           checked="@isChecked"
+                                           @onchange="e => ToggleDocument(doc.Id, e.Value is true)" />
+                                    <span>
+                                        <strong>@doc.OriginalFilename</strong>
+                                        (@ApplicationDisplayHelpers.GetDocumentKindLabel(doc.Kind), @ApplicationDisplayHelpers.FormatFileSize(doc.SizeBytes))
+                                        @if (doc.IsCurrentCv)
+                                        {
+                                            <span class="badge badge-info">Aktuální CV</span>
+                                        }
+                                    </span>
+                                </label>
+                            }
+                        </div>
+                    }
+                </fieldset>
+
+                <div class="actions">
+                    <button type="submit" disabled="@submitting">
+                        @(submitting ? "Odesílám přihlášku…" : "Odeslat přihlášku")
+                    </button>
+                </div>
+            </form>
+        }
+    </article>
+}
 
 @code {
     [Parameter] public Guid JobId { get; set; }
 
     private JobOfferDetailResponse? job;
+    private List<CandidateDocumentResponse>? documents;
+    private readonly HashSet<Guid> selectedDocumentIds = [];
+    private string? coverMessage;
+    private Guid? submittedApplicationId;
+
     private bool loading = true;
+    private bool loadingDocuments;
+    private bool submitting;
     private bool notFound;
     private string? error;
+    private string? applyError;
 
     protected override async Task OnParametersSetAsync()
     {
         job = null;
+        documents = null;
+        selectedDocumentIds.Clear();
+        coverMessage = null;
+        submittedApplicationId = null;
         loading = true;
         notFound = false;
         error = null;
+        applyError = null;
 
         try
         {
@@ -126,6 +222,92 @@ else if (job is not null)
         finally
         {
             loading = false;
+        }
+
+        if (job is not null && Session.User?.Role == UserRoles.Candidate)
+        {
+            await LoadCandidateDocumentsAsync();
+        }
+    }
+
+    private async Task LoadCandidateDocumentsAsync()
+    {
+        loadingDocuments = true;
+        try
+        {
+            using var response = await Http.GetAsync("api/profile/cv/history");
+            if (response.IsSuccessStatusCode)
+            {
+                documents = await response.Content.ReadFromJsonAsync<List<CandidateDocumentResponse>>() ?? [];
+                foreach (var doc in documents.Where(d => d.IsCurrentCv))
+                {
+                    selectedDocumentIds.Add(doc.Id);
+                }
+            }
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException)
+        {
+            documents = [];
+        }
+        finally
+        {
+            loadingDocuments = false;
+        }
+    }
+
+    private void ToggleDocument(Guid documentId, bool selected)
+    {
+        if (selected)
+            selectedDocumentIds.Add(documentId);
+        else
+            selectedDocumentIds.Remove(documentId);
+    }
+
+    private async Task SubmitApplicationAsync()
+    {
+        submitting = true;
+        applyError = null;
+
+        try
+        {
+            var payload = new
+            {
+                coverMessage = string.IsNullOrWhiteSpace(coverMessage) ? null : coverMessage.Trim(),
+                documentIds = selectedDocumentIds.Count > 0 ? selectedDocumentIds.ToArray() : null
+            };
+
+            using var response = await Http.PostAsJsonAsync($"api/jobs/{JobId}/applications", payload);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var created = await response.Content.ReadFromJsonAsync<SubmittedApplicationIdDto>();
+                submittedApplicationId = created?.Id ?? Guid.Empty;
+            }
+            else if (response.StatusCode == HttpStatusCode.Conflict)
+            {
+                applyError = "Na tuto pracovní pozici jste již přihlášku odeslal/a.";
+            }
+            else if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                applyError = "Pracovní nabídka již není otevřená pro přihlášky.";
+            }
+            else if (response.StatusCode == HttpStatusCode.Unauthorized)
+            {
+                Session.Logout();
+                applyError = "Přihlášení vypršelo. Přihlaste se prosím znovu.";
+            }
+            else
+            {
+                applyError = "Odeslání přihlášky se nezdařilo. Zkontrolujte zvolené dokumenty a zkuste to znovu.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            applyError = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            submitting = false;
         }
     }
 
@@ -153,4 +335,6 @@ else if (job is not null)
 
         return $"{range} {item.SalaryCurrency} {period}".Trim();
     }
+
+    private sealed record SubmittedApplicationIdDto(Guid Id);
 }

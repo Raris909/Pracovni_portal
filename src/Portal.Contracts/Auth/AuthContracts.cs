@@ -82,6 +82,12 @@ public sealed class LoginRequest
     public string Password { get; set; } = "";
 }
 
-public sealed record UserResponse(Guid Id, string Email, string FirstName, string LastName, string Role);
+public sealed record UserResponse(
+    Guid Id,
+    string Email,
+    string FirstName,
+    string LastName,
+    string Role,
+    string? Phone = null);
 
 public sealed record AuthResponse(string AccessToken, DateTimeOffset ExpiresAt, UserResponse User);

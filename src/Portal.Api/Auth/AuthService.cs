@@ -9,6 +9,26 @@ public enum LoginStatus
     InvalidCredentials
 }
 
+public enum UpdateAccountStatus
+{
+    Success,
+    UserNotFound
+}
+
+public enum ChangePasswordStatus
+{
+    Success,
+    UserNotFound,
+    InvalidCurrentPassword
+}
+
+public enum DeactivateAccountStatus
+{
+    Success,
+    UserNotFound,
+    InvalidCurrentPassword
+}
+
 public sealed class AuthService(
     IUserRepository userRepository,
     IPasswordHasher<UserResponse> passwordHasher,
@@ -59,4 +79,57 @@ public sealed class AuthService(
 
     public Task<UserResponse?> GetCurrentUserAsync(Guid userId, CancellationToken cancellationToken) =>
         userRepository.FindByIdAsync(userId, cancellationToken);
+
+    public async Task<(UserResponse? User, UpdateAccountStatus Status)> UpdateAccountAsync(
+        Guid userId,
+        UpdateAccountRequest request,
+        CancellationToken cancellationToken)
+    {
+        var phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
+        var updated = await userRepository.UpdateUserAsync(
+            userId,
+            request.FirstName.Trim(),
+            request.LastName.Trim(),
+            phone,
+            cancellationToken);
+
+        return updated is null
+            ? (null, UpdateAccountStatus.UserNotFound)
+            : (updated, UpdateAccountStatus.Success);
+    }
+
+    public async Task<ChangePasswordStatus> ChangePasswordAsync(
+        Guid userId,
+        ChangePasswordRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (user, passwordHash) = await userRepository.FindWithPasswordHashByIdAsync(userId, cancellationToken);
+        if (user is null || passwordHash is null)
+            return ChangePasswordStatus.UserNotFound;
+
+        var verificationResult = passwordHasher.VerifyHashedPassword(user, passwordHash, request.CurrentPassword);
+        if (verificationResult == PasswordVerificationResult.Failed)
+            return ChangePasswordStatus.InvalidCurrentPassword;
+
+        var newHash = passwordHasher.HashPassword(user, request.NewPassword);
+        await userRepository.UpdatePasswordHashAsync(user.Id, newHash, cancellationToken);
+        return ChangePasswordStatus.Success;
+    }
+
+    public async Task<DeactivateAccountStatus> DeactivateAccountAsync(
+        Guid userId,
+        DeactivateAccountRequest request,
+        CancellationToken cancellationToken)
+    {
+        var (user, passwordHash) = await userRepository.FindWithPasswordHashByIdAsync(userId, cancellationToken);
+        if (user is null || passwordHash is null)
+            return DeactivateAccountStatus.UserNotFound;
+
+        var verificationResult = passwordHasher.VerifyHashedPassword(user, passwordHash, request.CurrentPassword);
+        if (verificationResult == PasswordVerificationResult.Failed)
+            return DeactivateAccountStatus.InvalidCurrentPassword;
+
+        var deactivated = await userRepository.DeactivateUserAsync(user.Id, cancellationToken);
+        return deactivated ? DeactivateAccountStatus.Success : DeactivateAccountStatus.UserNotFound;
+    }
 }
