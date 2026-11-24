@@ -30,9 +30,6 @@ public sealed record CandidateDocumentResponse(
 public sealed record SetCurrentCvRequest(
     [Required] Guid DocumentId) : IValidatableObject
 {
-    [Required]
-    public Guid DocumentId { get; set; }
-
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
         if (DocumentId == Guid.Empty)
