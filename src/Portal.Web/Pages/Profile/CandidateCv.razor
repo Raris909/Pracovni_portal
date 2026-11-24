@@ -1,5 +1,7 @@
 @page "/profile/cv"
+@using System.Net
 @using System.Net.Http.Headers
+@using System.Text.Json
 @using Microsoft.JSInterop
 @using Portal.Contracts.Auth
 @using Portal.Contracts.Profiles
@@ -30,7 +32,7 @@
     <div style="display: grid; gap: .75rem; max-width: 28rem;">
         <div>
             <label for="cv-file">Vyberte soubor</label>
-            <InputFile OnChange="OnFileSelected" accept=".pdf,.docx" id="cv-file" />
+            <InputFile @key="fileInputKey" OnChange="OnFileSelected" accept=".pdf,.docx" id="cv-file" />
         </div>
 
         <label style="display: flex; gap: .5rem; align-items: center; font-weight: normal;">
@@ -102,6 +104,7 @@
 
     private List<CandidateDocumentResponse>? documents;
     private IBrowserFile? selectedFile;
+    private int fileInputKey;
     private bool setAsCurrent = true;
     private bool loading = true;
     private bool uploading;
@@ -125,11 +128,22 @@
         loading = true;
         try
         {
-            documents = await Http.GetFromJsonAsync<List<CandidateDocumentResponse>>("api/profile/cv/history");
+            using var response = await Http.GetAsync("api/profile/cv/history");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                documents = await response.Content.ReadFromJsonAsync<List<CandidateDocumentResponse>>();
+            }
+            else
+            {
+                error = "Nepodařilo se načíst seznam nahraných dokumentů.";
+            }
         }
         catch (HttpRequestException)
         {
-            error = "Nepodařilo se načíst seznam nahraných dokumentů.";
+            error = "Nepodařilo se načíst seznam nahraných dokumentů. Zkontrolujte připojení.";
         }
         finally
         {
@@ -147,6 +161,7 @@
         {
             error = "Soubor překračuje maximální povolenou velikost 10 MB.";
             selectedFile = null;
+            fileInputKey++;
         }
     }
 
@@ -174,21 +189,28 @@
 
             using var response = await Http.PostAsync($"api/profile/cv?setAsCurrent={setAsCurrent.ToString().ToLowerInvariant()}",
 content);
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
                 selectedFile = null;
+                fileInputKey++;
                 successMessage = "Životopis byl úspěšně nahrán.";
                 await LoadHistoryAsync();
             }
             else
             {
-                var problem = await response.Content.ReadFromJsonAsync<ApiErrorMessage>();
-                error = problem?.Message ?? "Nahrání souboru selhalo. Ověřte, že jde o platný soubor .pdf nebo .docx.";
+                error = await MapUploadErrorAsync(response);
             }
         }
-        catch (Exception)
+        catch (HttpRequestException)
         {
-            error = "Chyba při nahrávání souboru.";
+            error = "Chyba při komunikaci se serverem při nahrávání souboru.";
+        }
+        catch (IOException)
+        {
+            error = "Soubor se nepodařilo přečíst. Ověřte, že nepřekračuje 10 MB.";
         }
         finally
         {
@@ -204,10 +226,13 @@ content);
 
         try
         {
-            using var response = await Http.PutAsJsonAsync("api/profile/cv/current", new SetCurrentCvRequest
-            {
-                DocumentId = documentId
-            });
+            using var response = await Http.PutAsJsonAsync(
+                "api/profile/cv/current",
+                new SetCurrentCvRequest { DocumentId = documentId });
+
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
                 successMessage = "Aktivní životopis byl změněn.";
@@ -215,9 +240,12 @@ content);
             }
             else
             {
-                var body = await response.Content.ReadAsStringAsync();
                 error = "Nepodařilo se nastavit aktivní životopis.";
             }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
         }
         finally
         {
@@ -233,29 +261,20 @@ content);
         try
         {
             using var response = await Http.GetAsync($"api/profile/cv/{doc.Id}/download");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (!response.IsSuccessStatusCode)
             {
                 error = "Soubor se nepodařilo stáhnout.";
                 return;
             }
 
-            var bytes = await response.Content.ReadAsByteArrayAsync();
-            var base64 = Convert.ToBase64String(bytes);
-
-            await JS.InvokeVoidAsync(
-                "eval",
-                $$"""
-                (() => {
-                    const a = document.createElement('a');
-                    a.href = 'data:{{doc.MimeType}};base64,{{base64}}';
-                    a.download = {{System.Text.Json.JsonSerializer.Serialize(doc.OriginalFilename)}};
-                    document.body.appendChild(a);
-                    a.click();
-                    a.remove();
-                })()
-                """);
+            await using var stream = await response.Content.ReadAsStreamAsync();
+            using var streamRef = new DotNetStreamReference(stream);
+            await JS.InvokeVoidAsync("portalDownloadStream", doc.OriginalFilename, doc.MimeType, streamRef);
         }
-        catch (Exception)
+        catch (Exception ex) when (ex is HttpRequestException or JSException)
         {
             error = "Chyba při stahování souboru.";
         }
@@ -263,6 +282,50 @@ content);
         {
             busy = false;
         }
+    }
+
+    private static async Task<string> MapUploadErrorAsync(HttpResponseMessage response)
+    {
+        if (response.StatusCode == HttpStatusCode.RequestEntityTooLarge)
+            return "Soubor překračuje maximální povolenou velikost 10 MB.";
+
+        string? serverMessage = null;
+        try
+        {
+            var problem = await response.Content.ReadFromJsonAsync<ApiErrorMessage>();
+            serverMessage = problem?.Message;
+        }
+        catch (JsonException)
+        {
+            // Non-JSON error response (e.g. proxy/server HTML or plain text)
+        }
+
+        if (string.IsNullOrWhiteSpace(serverMessage))
+            return "Nahrání souboru selhalo. Ověřte, že jde o platný soubor .pdf nebo .docx do 10 MB.";
+
+        if (serverMessage.Contains("signature", StringComparison.OrdinalIgnoreCase))
+            return "Obsah souboru neodpovídá platnému formátu .pdf nebo .docx.";
+
+        if (serverMessage.Contains("format", StringComparison.OrdinalIgnoreCase))
+            return "Nepodporovaný formát souboru. Povolené jsou pouze soubory .pdf a .docx.";
+
+        if (serverMessage.Contains("empty", StringComparison.OrdinalIgnoreCase))
+            return "Nahraný soubor nesmí být prázdný.";
+
+        if (serverMessage.Contains("maximum allowed limit", StringComparison.OrdinalIgnoreCase))
+            return "Soubor překračuje maximální povolenou velikost 10 MB.";
+
+        return "Nahrání souboru selhalo. Ověřte, že jde o platný soubor .pdf nebo .docx.";
+    }
+
+    private bool HandleUnauthorized(HttpStatusCode statusCode)
+    {
+        if (statusCode != HttpStatusCode.Unauthorized)
+            return false;
+
+        Session.Logout();
+        Navigation.NavigateTo("login");
+        return true;
     }
 
     private static string FormatSize(long bytes)

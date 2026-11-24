@@ -15,6 +15,19 @@ public sealed class AuthSession(HttpClient http)
     public async Task<string?> LoginAsync(LoginRequest request) =>
         await CompleteLoginAsync(await http.PostAsJsonAsync("api/auth/login", request));
 
+    public void UpdateUserName(string firstName, string lastName)
+    {
+        if (User is null)
+            return;
+
+        User = User with
+        {
+            FirstName = firstName,
+            LastName = lastName
+        };
+        Changed?.Invoke();
+    }
+
     public void Logout()
     {
         User = null;

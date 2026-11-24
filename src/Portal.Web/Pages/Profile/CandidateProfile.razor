@@ -91,13 +91,13 @@ else
     <section>
         <h2>Pracovní zkušenosti</h2>
 
-        @if (profile.Experiences.Count == 0)
+        @if (experiences.Count == 0)
         {
             <p>Zatím nemáte přidané žádné pracovní zkušenosti.</p>
         }
         else
         {
-            @foreach (var exp in profile.Experiences)
+            @foreach (var exp in experiences)
             {
                 <article>
                     <h3>@exp.Position — @exp.Employer</h3>
@@ -162,13 +162,13 @@ else
     <section>
         <h2>Vzdělání</h2>
 
-        @if (profile.Education.Count == 0)
+        @if (education.Count == 0)
         {
             <p>Zatím nemáte přidané žádné vzdělání.</p>
         }
         else
         {
-            @foreach (var edu in profile.Education)
+            @foreach (var edu in education)
             {
                 <article>
                     <h3>@edu.School</h3>
@@ -238,7 +238,9 @@ else
 @code {
     private CandidateProfileResponse? profile;
     private UpdateCandidateProfileRequest profileModel = new();
-    private string skillsInput = "";
+    private List<CandidateExperienceResponse> experiences = [];
+    private List<CandidateEducationResponse> education = [];
+    private string rawSkillsInput = "";
 
     private CandidateExperienceRequest experienceModel = new() { StartDate = DateOnly.FromDateTime(DateTime.Today) };
     private Guid? editingExperienceId;
@@ -255,6 +257,19 @@ else
     {
         get => profileModel.CountryCode;
         set => profileModel.CountryCode = string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+    }
+
+    private string skillsInput
+    {
+        get => rawSkillsInput;
+        set
+        {
+            rawSkillsInput = value;
+            profileModel.Skills = value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
     }
 
     protected override async Task OnInitializedAsync()
@@ -274,15 +289,28 @@ else
         error = null;
         try
         {
-            profile = await Http.GetFromJsonAsync<CandidateProfileResponse>("api/profiles/me");
-            if (profile is not null)
+            using var response = await Http.GetAsync("api/profiles/me");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
             {
-                MapProfileToForm(profile);
+                profile = await response.Content.ReadFromJsonAsync<CandidateProfileResponse>();
+                if (profile is not null)
+                {
+                    MapProfileToForm(profile);
+                    experiences = [.. profile.Experiences];
+                    education = [.. profile.Education];
+                }
+            }
+            else
+            {
+                error = "Nepodařilo se načíst profil uchazeče.";
             }
         }
         catch (HttpRequestException)
         {
-            error = "Nepodařilo se načíst profil uchazeče.";
+            error = "Nepodařilo se načíst profil uchazeče. Zkontrolujte připojení.";
         }
         finally
         {
@@ -303,7 +331,7 @@ else
             CountryCode = source.CountryCode,
             Skills = [.. source.Skills]
         };
-        skillsInput = string.Join(", ", source.Skills);
+        rawSkillsInput = string.Join(", ", source.Skills);
     }
 
     private async Task SaveProfileAsync()
@@ -312,14 +340,12 @@ else
         error = null;
         successMessage = null;
 
-        profileModel.Skills = skillsInput
-            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
         try
         {
             using var response = await Http.PutAsJsonAsync("api/profiles/me", profileModel);
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
                 var updated = await response.Content.ReadFromJsonAsync<CandidateProfileResponse>();
@@ -327,6 +353,7 @@ else
                 {
                     profile = updated;
                     MapProfileToForm(updated);
+                    Session.UpdateUserName(updated.FirstName, updated.LastName);
                 }
                 successMessage = "Profil byl úspěšně uložen.";
             }
@@ -376,16 +403,38 @@ else
                 ? await Http.PutAsJsonAsync($"api/profiles/me/experiences/{editingExperienceId}", experienceModel)
                 : await Http.PostAsJsonAsync("api/profiles/me/experiences", experienceModel);
 
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
+                var saved = await response.Content.ReadFromJsonAsync<CandidateExperienceResponse>();
+                if (saved is not null)
+                {
+                    if (editingExperienceId.HasValue)
+                    {
+                        var index = experiences.FindIndex(x => x.Id == saved.Id);
+                        if (index >= 0)
+                            experiences[index] = saved;
+                    }
+                    else
+                    {
+                        experiences.Add(saved);
+                    }
+                    experiences = experiences.OrderByDescending(x => x.StartDate).ToList();
+                }
+
                 CancelEditExperience();
-                await LoadProfileAsync();
                 successMessage = "Pracovní zkušenost byla uložena.";
             }
             else
             {
                 error = "Uložení pracovní zkušenosti selhalo.";
             }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
         }
         finally
         {
@@ -402,19 +451,26 @@ else
         try
         {
             using var response = await Http.DeleteAsync($"api/profiles/me/experiences/{id}");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
+                experiences.RemoveAll(x => x.Id == id);
                 if (editingExperienceId == id)
                 {
                     CancelEditExperience();
                 }
-                await LoadProfileAsync();
                 successMessage = "Pracovní zkušenost byla odstraněna.";
             }
             else
             {
                 error = "Odstranění pracovní zkušenosti selhalo.";
             }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
         }
         finally
         {
@@ -453,16 +509,38 @@ else
                 ? await Http.PutAsJsonAsync($"api/profiles/me/education/{editingEducationId}", educationModel)
                 : await Http.PostAsJsonAsync("api/profiles/me/education", educationModel);
 
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
+                var saved = await response.Content.ReadFromJsonAsync<CandidateEducationResponse>();
+                if (saved is not null)
+                {
+                    if (editingEducationId.HasValue)
+                    {
+                        var index = education.FindIndex(x => x.Id == saved.Id);
+                        if (index >= 0)
+                            education[index] = saved;
+                    }
+                    else
+                    {
+                        education.Add(saved);
+                    }
+                    education = education.OrderByDescending(x => x.StartDate).ToList();
+                }
+
                 CancelEditEducation();
-                await LoadProfileAsync();
                 successMessage = "Vzdělání bylo uloženo.";
             }
             else
             {
                 error = "Uložení vzdělání selhalo.";
             }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
         }
         finally
         {
@@ -479,13 +557,16 @@ else
         try
         {
             using var response = await Http.DeleteAsync($"api/profiles/me/education/{id}");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
             if (response.IsSuccessStatusCode)
             {
+                education.RemoveAll(x => x.Id == id);
                 if (editingEducationId == id)
                 {
                     CancelEditEducation();
                 }
-                await LoadProfileAsync();
                 successMessage = "Vzdělání bylo odstraněno.";
             }
             else
@@ -493,9 +574,23 @@ else
                 error = "Odstranění vzdělání selhalo.";
             }
         }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
         finally
         {
             busy = false;
         }
+    }
+
+    private bool HandleUnauthorized(HttpStatusCode statusCode)
+    {
+        if (statusCode != HttpStatusCode.Unauthorized)
+            return false;
+
+        Session.Logout();
+        Navigation.NavigateTo("login");
+        return true;
     }
 }

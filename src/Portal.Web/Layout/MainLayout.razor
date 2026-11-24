@@ -9,9 +9,9 @@
         <NavLink href="" Match="NavLinkMatch.All">Pracovní portál</NavLink>
         @if (Session.User is { } user)
         {
-            @if (Session.User?.Role == UserRoles.Candidate)
+            @if (user.Role == UserRoles.Candidate)
             {
-                <NavLink href="profile">Můj profil</NavLink>
+                <NavLink href="profile" Match="NavLinkMatch.All">Můj profil</NavLink>
                 <NavLink href="profile/cv">Životopisy</NavLink>
             }
             @if (user.Role == UserRoles.Company)
