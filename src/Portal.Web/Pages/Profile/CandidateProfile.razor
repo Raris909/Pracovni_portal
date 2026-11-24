@@ -1,0 +1,596 @@
+@page "/profile"
+@using System.Net
+@using Portal.Contracts.Auth
+@using Portal.Contracts.Profiles
+@inject Portal.Web.Services.AuthSession Session
+@inject HttpClient Http
+@inject NavigationManager Navigation
+
+<PageTitle>Můj profil</PageTitle>
+
+<h1>Profil uchazeče</h1>
+
+@if (loading)
+{
+    <p>Načítání profilu…</p>
+}
+else if (profile is null)
+{
+    <p role="alert">@(error ?? "Profil nebyl nalezen.")</p>
+}
+else
+{
+    <p><a class="btn-secondary" href="profile/cv">Správa životopisů (CV) →</a></p>
+
+    @if (error is not null)
+    {
+        <p role="alert">@error</p>
+    }
+    @if (successMessage is not null)
+    {
+        <p role="status" style="color: green;">@successMessage</p>
+    }
+
+    <section>
+        <h2>Osobní údaje a dovednosti</h2>
+        <p><strong>E-mail:</strong> @profile.Email</p>
+
+        <EditForm Model="profileModel" OnValidSubmit="SaveProfileAsync">
+            <DataAnnotationsValidator />
+
+            <div>
+                <label for="first-name">Jméno</label>
+                <InputText @bind-Value="profileModel.FirstName" id="first-name" />
+            </div>
+
+            <div>
+                <label for="last-name">Příjmení</label>
+                <InputText @bind-Value="profileModel.LastName" id="last-name" />
+            </div>
+
+            <div>
+                <label for="phone">Telefon</label>
+                <InputText @bind-Value="profileModel.Phone" id="phone" />
+            </div>
+
+            <div>
+                <label for="headline">Profesní titulek (Headline)</label>
+                <InputText @bind-Value="profileModel.Headline" id="headline" placeholder="např. Senior .NET Developer" />
+            </div>
+
+            <div>
+                <label for="city">Město</label>
+                <InputText @bind-Value="profileModel.City" id="city" />
+            </div>
+
+            <div>
+                <label for="country">Kód země (2 velká písmena, např. CZ)</label>
+                <InputText @bind-Value="countryCodeInput" id="country" placeholder="CZ" />
+            </div>
+
+            <div>
+                <label for="skills">Dovednosti (oddělené čárkou)</label>
+                <InputText @bind-Value="skillsInput" id="skills" placeholder="C#, Blazor, PostgreSQL, Git" />
+            </div>
+
+            <div>
+                <label for="summary">O mně / Shrnutí</label>
+                <InputTextArea @bind-Value="profileModel.Summary" id="summary" rows="5" />
+            </div>
+
+            <button type="submit" disabled="@busy">
+                @(busy ? "Ukládám…" : "Uložit profil")
+            </button>
+
+            <ValidationSummary />
+        </EditForm>
+    </section>
+
+    <hr />
+
+    <section>
+        <h2>Pracovní zkušenosti</h2>
+
+        @if (experiences.Count == 0)
+        {
+            <p>Zatím nemáte přidané žádné pracovní zkušenosti.</p>
+        }
+        else
+        {
+            @foreach (var exp in experiences)
+            {
+                <article>
+                    <h3>@exp.Position — @exp.Employer</h3>
+                    <p>@exp.StartDate.ToString("MM/yyyy") – @(exp.EndDate?.ToString("MM/yyyy") ?? "současnost")</p>
+                    @if (!string.IsNullOrWhiteSpace(exp.Description))
+                    {
+                        <p style="white-space: pre-line;">@exp.Description</p>
+                    }
+                    <div class="actions">
+                        <button type="button" disabled="@busy" @onclick="() => StartEditExperience(exp)">Upravit</button>
+                        <button type="button" disabled="@busy" @onclick="() => DeleteExperienceAsync(exp.Id)">Smazat</button>
+                    </div>
+                </article>
+            }
+        }
+
+        <h3>@(editingExperienceId.HasValue ? "Upravit zkušenost" : "Přidat pracovní zkušenost")</h3>
+        <EditForm Model="experienceModel" OnValidSubmit="SaveExperienceAsync">
+            <DataAnnotationsValidator />
+
+            <div>
+                <label for="exp-employer">Zaměstnavatel</label>
+                <InputText @bind-Value="experienceModel.Employer" id="exp-employer" />
+            </div>
+
+            <div>
+                <label for="exp-position">Pozice</label>
+                <InputText @bind-Value="experienceModel.Position" id="exp-position" />
+            </div>
+
+            <div>
+                <label for="exp-start">Datum nástupu</label>
+                <InputDate @bind-Value="experienceModel.StartDate" id="exp-start" />
+            </div>
+
+            <div>
+                <label for="exp-end">Datum ukončení (nechte prázdné, pokud trvá)</label>
+                <InputDate @bind-Value="experienceModel.EndDate" id="exp-end" />
+            </div>
+
+            <div>
+                <label for="exp-desc">Popis náplně práce</label>
+                <InputTextArea @bind-Value="experienceModel.Description" id="exp-desc" rows="4" />
+            </div>
+
+            <div class="actions">
+                <button type="submit" disabled="@busy">
+                    @(editingExperienceId.HasValue ? "Uložit změny" : "Přidat zkušenost")
+                </button>
+                @if (editingExperienceId.HasValue)
+                {
+                    <button type="button" disabled="@busy" @onclick="CancelEditExperience">Zrušit</button>
+                }
+            </div>
+
+            <ValidationSummary />
+        </EditForm>
+    </section>
+
+    <hr />
+
+    <section>
+        <h2>Vzdělání</h2>
+
+        @if (education.Count == 0)
+        {
+            <p>Zatím nemáte přidané žádné vzdělání.</p>
+        }
+        else
+        {
+            @foreach (var edu in education)
+            {
+                <article>
+                    <h3>@edu.School</h3>
+                    <p>
+                        @if (!string.IsNullOrWhiteSpace(edu.Degree))
+                        {
+                            <span>@edu.Degree · </span>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(edu.FieldOfStudy))
+                        {
+                            <span>@edu.FieldOfStudy · </span>
+                        }
+                        <span>@edu.StartDate.ToString("MM/yyyy") – @(edu.EndDate?.ToString("MM/yyyy") ?? "současnost")</span>
+                    </p>
+                    <div class="actions">
+                        <button type="button" disabled="@busy" @onclick="() => StartEditEducation(edu)">Upravit</button>
+                        <button type="button" disabled="@busy" @onclick="() => DeleteEducationAsync(edu.Id)">Smazat</button>
+                    </div>
+                </article>
+            }
+        }
+
+        <h3>@(editingEducationId.HasValue ? "Upravit vzdělání" : "Přidat vzdělání")</h3>
+        <EditForm Model="educationModel" OnValidSubmit="SaveEducationAsync">
+            <DataAnnotationsValidator />
+
+            <div>
+                <label for="edu-school">Škola / Instituce</label>
+                <InputText @bind-Value="educationModel.School" id="edu-school" />
+            </div>
+
+            <div>
+                <label for="edu-field">Obor studia</label>
+                <InputText @bind-Value="educationModel.FieldOfStudy" id="edu-field" />
+            </div>
+
+            <div>
+                <label for="edu-degree">Titul</label>
+                <InputText @bind-Value="educationModel.Degree" id="edu-degree" placeholder="např. Bc., Ing., Mgr." />
+            </div>
+
+            <div>
+                <label for="edu-start">Zahájení studia</label>
+                <InputDate @bind-Value="educationModel.StartDate" id="edu-start" />
+            </div>
+
+            <div>
+                <label for="edu-end">Ukončení studia (nechte prázdné, pokud studium trvá)</label>
+                <InputDate @bind-Value="educationModel.EndDate" id="edu-end" />
+            </div>
+
+            <div class="actions">
+                <button type="submit" disabled="@busy">
+                    @(editingEducationId.HasValue ? "Uložit změny" : "Přidat vzdělání")
+                </button>
+                @if (editingEducationId.HasValue)
+                {
+                    <button type="button" disabled="@busy" @onclick="CancelEditEducation">Zrušit</button>
+                }
+            </div>
+
+            <ValidationSummary />
+        </EditForm>
+    </section>
+}
+
+@code {
+    private CandidateProfileResponse? profile;
+    private UpdateCandidateProfileRequest profileModel = new();
+    private List<CandidateExperienceResponse> experiences = [];
+    private List<CandidateEducationResponse> education = [];
+    private string rawSkillsInput = "";
+
+    private CandidateExperienceRequest experienceModel = new() { StartDate = DateOnly.FromDateTime(DateTime.Today) };
+    private Guid? editingExperienceId;
+
+    private CandidateEducationRequest educationModel = new() { StartDate = DateOnly.FromDateTime(DateTime.Today) };
+    private Guid? editingEducationId;
+
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+    private string? successMessage;
+
+    private string? countryCodeInput
+    {
+        get => profileModel.CountryCode;
+        set => profileModel.CountryCode = string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
+    }
+
+    private string skillsInput
+    {
+        get => rawSkillsInput;
+        set
+        {
+            rawSkillsInput = value;
+            profileModel.Skills = value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Session.User is null || Session.User.Role != UserRoles.Candidate)
+        {
+            Navigation.NavigateTo("login");
+            return;
+        }
+
+        await LoadProfileAsync();
+    }
+
+    private async Task LoadProfileAsync()
+    {
+        loading = true;
+        error = null;
+        try
+        {
+            using var response = await Http.GetAsync("api/profiles/me");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                profile = await response.Content.ReadFromJsonAsync<CandidateProfileResponse>();
+                if (profile is not null)
+                {
+                    MapProfileToForm(profile);
+                    experiences = [.. profile.Experiences];
+                    education = [.. profile.Education];
+                }
+            }
+            else
+            {
+                error = "Nepodařilo se načíst profil uchazeče.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Nepodařilo se načíst profil uchazeče. Zkontrolujte připojení.";
+        }
+        finally
+        {
+            loading = false;
+        }
+    }
+
+    private void MapProfileToForm(CandidateProfileResponse source)
+    {
+        profileModel = new UpdateCandidateProfileRequest
+        {
+            FirstName = source.FirstName,
+            LastName = source.LastName,
+            Phone = source.Phone,
+            Headline = source.Headline,
+            Summary = source.Summary,
+            City = source.City,
+            CountryCode = source.CountryCode,
+            Skills = [.. source.Skills]
+        };
+        rawSkillsInput = string.Join(", ", source.Skills);
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.PutAsJsonAsync("api/profiles/me", profileModel);
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                var updated = await response.Content.ReadFromJsonAsync<CandidateProfileResponse>();
+                if (updated is not null)
+                {
+                    profile = updated;
+                    MapProfileToForm(updated);
+                    Session.UpdateUserName(updated.FirstName, updated.LastName);
+                }
+                successMessage = "Profil byl úspěšně uložen.";
+            }
+            else
+            {
+                error = "Uložení profilu selhalo. Zkontrolujte zadané údaje.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void StartEditExperience(CandidateExperienceResponse exp)
+    {
+        editingExperienceId = exp.Id;
+        experienceModel = new CandidateExperienceRequest
+        {
+            Employer = exp.Employer,
+            Position = exp.Position,
+            Description = exp.Description,
+            StartDate = exp.StartDate,
+            EndDate = exp.EndDate
+        };
+    }
+
+    private void CancelEditExperience()
+    {
+        editingExperienceId = null;
+        experienceModel = new CandidateExperienceRequest { StartDate = DateOnly.FromDateTime(DateTime.Today) };
+    }
+
+    private async Task SaveExperienceAsync()
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = editingExperienceId.HasValue
+                ? await Http.PutAsJsonAsync($"api/profiles/me/experiences/{editingExperienceId}", experienceModel)
+                : await Http.PostAsJsonAsync("api/profiles/me/experiences", experienceModel);
+
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                var saved = await response.Content.ReadFromJsonAsync<CandidateExperienceResponse>();
+                if (saved is not null)
+                {
+                    if (editingExperienceId.HasValue)
+                    {
+                        var index = experiences.FindIndex(x => x.Id == saved.Id);
+                        if (index >= 0)
+                            experiences[index] = saved;
+                    }
+                    else
+                    {
+                        experiences.Add(saved);
+                    }
+                    experiences = experiences.OrderByDescending(x => x.StartDate).ToList();
+                }
+
+                CancelEditExperience();
+                successMessage = "Pracovní zkušenost byla uložena.";
+            }
+            else
+            {
+                error = "Uložení pracovní zkušenosti selhalo.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteExperienceAsync(Guid id)
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.DeleteAsync($"api/profiles/me/experiences/{id}");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                experiences.RemoveAll(x => x.Id == id);
+                if (editingExperienceId == id)
+                {
+                    CancelEditExperience();
+                }
+                successMessage = "Pracovní zkušenost byla odstraněna.";
+            }
+            else
+            {
+                error = "Odstranění pracovní zkušenosti selhalo.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private void StartEditEducation(CandidateEducationResponse edu)
+    {
+        editingEducationId = edu.Id;
+        educationModel = new CandidateEducationRequest
+        {
+            School = edu.School,
+            FieldOfStudy = edu.FieldOfStudy,
+            Degree = edu.Degree,
+            StartDate = edu.StartDate,
+            EndDate = edu.EndDate
+        };
+    }
+
+    private void CancelEditEducation()
+    {
+        editingEducationId = null;
+        educationModel = new CandidateEducationRequest { StartDate = DateOnly.FromDateTime(DateTime.Today) };
+    }
+
+    private async Task SaveEducationAsync()
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = editingEducationId.HasValue
+                ? await Http.PutAsJsonAsync($"api/profiles/me/education/{editingEducationId}", educationModel)
+                : await Http.PostAsJsonAsync("api/profiles/me/education", educationModel);
+
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                var saved = await response.Content.ReadFromJsonAsync<CandidateEducationResponse>();
+                if (saved is not null)
+                {
+                    if (editingEducationId.HasValue)
+                    {
+                        var index = education.FindIndex(x => x.Id == saved.Id);
+                        if (index >= 0)
+                            education[index] = saved;
+                    }
+                    else
+                    {
+                        education.Add(saved);
+                    }
+                    education = education.OrderByDescending(x => x.StartDate).ToList();
+                }
+
+                CancelEditEducation();
+                successMessage = "Vzdělání bylo uloženo.";
+            }
+            else
+            {
+                error = "Uložení vzdělání selhalo.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteEducationAsync(Guid id)
+    {
+        busy = true;
+        error = null;
+        successMessage = null;
+
+        try
+        {
+            using var response = await Http.DeleteAsync($"api/profiles/me/education/{id}");
+            if (HandleUnauthorized(response.StatusCode))
+                return;
+
+            if (response.IsSuccessStatusCode)
+            {
+                education.RemoveAll(x => x.Id == id);
+                if (editingEducationId == id)
+                {
+                    CancelEditEducation();
+                }
+                successMessage = "Vzdělání bylo odstraněno.";
+            }
+            else
+            {
+                error = "Odstranění vzdělání selhalo.";
+            }
+        }
+        catch (HttpRequestException)
+        {
+            error = "Chyba při komunikaci se serverem.";
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private bool HandleUnauthorized(HttpStatusCode statusCode)
+    {
+        if (statusCode != HttpStatusCode.Unauthorized)
+            return false;
+
+        Session.Logout();
+        Navigation.NavigateTo("login");
+        return true;
+    }
+}
